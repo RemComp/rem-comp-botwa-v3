@@ -1,12 +1,20 @@
 const fs = require('fs')
-const fetch = require('node-fetch')
 const snappy = require('snappy')
 const PhoneNumber = require('awesome-phonenumber')
 
 const ffmpeg = require('fluent-ffmpeg')
 const { requestToGolangEngine, isBase64, buildBase64Data } = require('../utils/utils')
 
-const FileType = require('file-type')
+const { loadEsm }  = require('load-esm')
+let FileType = undefined
+
+async function loadFileType() {
+    FileType = await loadEsm('file-type')
+}
+loadFileType().catch(err => {
+    console.error('Failed to load file-type:', err)
+    process.exit(1)
+})
 
 function formatResponseFromGoClient (from, responseData, teks = '') {
     const mapReturnData = {

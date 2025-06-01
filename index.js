@@ -5,11 +5,13 @@ const path = require('path');
 const { sleep } = require('./utils/utils');
 const sessionInit = require('./session_init');
 
+if(!process.env.MONGO_URI) return console.error('MONGO_URI is not set in environment variables. Please set it before running the script.');
+
 async function setupMultiCLient() {
     // if not running by pm2, stop
     if (!process.env.pm_id) {
         console.error('This script should be run using PM2. Please start it with "pm2 start index.js --name rem"');
-        return;
+        process.exit(1);
     }
 
     // parse running client
@@ -25,6 +27,8 @@ async function setupMultiCLient() {
                 PORT: port,
                 CLIENT_ID: i + 1,
                 CLIENT_NAME: `Client ${i + 1}`,
+                MONGO_URI: process.env.MONGO_URI,
+                SERVER_ID: process.env.SERVER_ID || 'default-server',
             }
         });
     }
@@ -36,6 +40,8 @@ async function setupMultiCLient() {
         env: {
             PORT: process.env.PORT_WEB || 5000,
             CLIENT_ALL_PORT: JSON.stringify(clientAllPort),
+            MONGO_URI: process.env.MONGO_URI,
+            SERVER_ID: process.env.SERVER_ID || 'default-server',
         }
     });
 
@@ -193,4 +199,4 @@ async function turnOffWebInterface() {
 }
 
 
-main()
+setupMultiCLient()

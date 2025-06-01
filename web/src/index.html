@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot QR Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/x-icon" href="https://apipedia.id/lovable-uploads/65a3df08-7402-40d2-9278-5f5a8ebc0bf9.png">
+    
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spin-animation {
+            animation: spin 1s linear infinite;
+        }
+        .qr-code img {
+            width: 200px;
+            height: 200px;
+            object-fit: contain;
+            image-rendering: pixelated;
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .bot-card {
+            transition: all 0.3s ease;
+        }
+        .bot-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .status-offline {
+            background: linear-gradient(45deg, #6b7280, #4b5563);
+        }
+        .status-pairing {
+            background: linear-gradient(45deg, #f59e0b, #d97706);
+        }
+        .status-scanning {
+            background: linear-gradient(45deg, #fbbf24, #f59e0b);
+        }
+        .status-connected {
+            background: linear-gradient(45deg, #10b981, #059669);
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #8b5cf6;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen" id="admin-body" style="display:none;">
+    <!-- Header -->
+    <div class="bg-white shadow-md p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">Bot QR Manager</h1>
+            <div class="flex items-center gap-2 bg-blue-100 px-3 py-1.5 rounded-lg">
+                <svg id="refresh-icon" class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s1.343-9 3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                </svg>
+                <span class="text-sm font-medium text-blue-600">Auto-refresh in <span id="countdown">5</span>s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto p-6">
+        <!-- Controls Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                <!-- Search and Filters -->
+                <div class="flex flex-col sm:flex-row gap-4 flex-1">
+                    <!-- Search Input -->
+                    <div class="flex-1">
+                        <input type="text" id="search-input" placeholder="Search by name, API key, number, or owner..." 
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div class="flex gap-2">
+                        <select id="filter-status" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Status</option>
+                            <option value="0">Offline</option>
+                            <option value="1">Pairing</option>
+                            <option value="2">Scanning</option>
+                            <option value="3">Connected</option>
+                        </select>
+                        
+                        <label class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg">
+                            <input type="checkbox" id="filter-bot-utama" class="rounded">
+                            <span class="text-sm">Main Bot Only</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Add New Bot Button -->
+                <button id="add-new-bot" class="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add New Bot
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Total Bots</p>
+                        <p class="text-2xl font-bold text-gray-800" id="stat-total">0</p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Connected</p>
+                        <p class="text-2xl font-bold text-green-600" id="stat-connected">0</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <svg class="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Scanning</p>
+                        <p class="text-2xl font-bold text-yellow-600" id="stat-scanning">0</p>
+                    </div>
+                    <div class="bg-yellow-100 p-3 rounded-full">
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-2.239"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Offline</p>
+                        <p class="text-2xl font-bold text-red-600" id="stat-offline">0</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-full">
+                        <svg class="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bot Grid - Max 5 columns -->
+        <div id="bot-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-6">
+            <!-- Bots will be dynamically added here -->
+        </div>
+
+        <!-- Pagination -->
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="text-sm text-gray-700">
+                    Showing <span id="showing-start">0</span> to <span id="showing-end">0</span> of <span id="total-items">0</span> results
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="prev-page" class="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Previous
+                    </button>
+                    
+                    <div id="page-numbers" class="flex gap-1">
+                        <!-- Page numbers will be generated here -->
+                    </div>
+                    
+                    <button id="next-page" class="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Next
+                    </button>
+                </div>
+                
+                <select id="page-size" class="px-3 py-1 border border-gray-300 rounded-md">
+                    <option value="20" selected>20 per page</option>
+                    <option value="40">40 per page</option>
+                    <option value="60">60 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Bot Modal -->
+    <div id="add-bot-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Add New Bot</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Device Name *</label>
+                    <input type="text" id="device-name" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Enter device name">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Owner Phone *</label>
+                    <input type="text" id="owner-phone" class="w-full p-2 border border-gray-300 rounded-md" placeholder="628xxxxxxxxx">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Pairing Method</label>
+                    <select id="pairing-method" class="w-full p-2 border border-gray-300 rounded-md">
+                        <option value="qr">QR Code</option>
+                        <option value="code">Pairing Code</option>
+                    </select>
+                </div>
+                
+                <div id="phone-number-field" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                    <input type="text" id="phone-number" class="w-full p-2 border border-gray-300 rounded-md" placeholder="628xxxxxxxxx">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Custom API Key (Optional)</label>
+                    <input type="text" id="custom-api-key" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Leave empty for auto-generated">
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end space-x-2">
+                <button id="cancel-add" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button id="confirm-add" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Add Bot
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.0/axios.min.js"></script>
+    <script>
+        let userLogin = '';
+        let userPassword = '';
+        let currentPage = 1;
+        let pageSize = 20; // Changed default to 20
+        let searchQuery = '';
+        let filterStatus = '';
+        let filterBotUtama = false;
+        let refreshInterval;
+        let countdownInterval;
+        let countdown = 5;
+
+        // Toast notification system
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = Date.now();
+            
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            
+            const toast = document.createElement('div');
+            toast.id = `toast-${toastId}`;
+            toast.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+            toast.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span>${message}</span>
+                    <button onclick="removeToast('${toastId}')" class="ml-2 text-white hover:text-gray-200">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                removeToast(toastId);
+            }, 5000);
+        }
+
+        function removeToast(toastId) {
+            const toast = document.getElementById(`toast-${toastId}`);
+            if (toast) {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }
+        }
+
+        // Authentication
+        async function authenticate() {
+            userLogin = prompt('Enter Username:');
+            userPassword = prompt('Enter Password:');
+
+            try {
+                const response = await axios.post('/api/auth', { 
+                    username: userLogin, 
+                    password: userPassword 
+                });
+                
+                if (response.data.success) {
+                    document.getElementById('admin-body').style.display = 'block';
+                    initializeApp();
+                } else {
+                    alert('Authentication failed: ' + response.data.message);
+                    location.reload();
+                }
+            } catch (error) {
+                alert('Authentication error: ' + error.message);
+                location.reload();
+            }
+        }
+
+        // Initialize app
+        function initializeApp() {
+            loadBots();
+            startAutoRefresh();
+            setupEventListeners();
+        }
+
+        // Load bots with pagination
+        async function loadBots() {
+            try {
+                const response = await axios.post('/api/list-qr', {
+                    username: userLogin,
+                    password: userPassword,
+                    page: currentPage,
+                    limit: pageSize,
+                    search: searchQuery,
+                    filterBotUtama: filterBotUtama
+                });
+
+                if (response.data.success) {
+                    displayBots(response.data.listQr);
+                    updateStats(response.data.listQr);
+                    updatePagination(response.data.totalCount, response.data.totalPage);
+                }
+            } catch (error) {
+                showToast('Failed to load bots: ' + error.message, 'error');
+            }
+        }
+
+        // Display bots
+        function displayBots(bots) {
+            const container = document.getElementById('bot-container');
+            container.innerHTML = '';
+
+            bots.forEach(bot => {
+                const botCard = createBotCard(bot);
+                container.appendChild(botCard);
+            });
+        }
+
+        // Create bot card
+        function createBotCard(bot) {
+            const statusClass = {
+                0: 'status-offline',
+                1: 'status-pairing', 
+                2: 'status-scanning',
+                3: 'status-connected'
+            }[bot.status] || 'status-offline';
+
+            const statusText = {
+                0: 'Offline',
+                1: 'Pairing',
+                2: 'Scanning',
+                3: 'Connected'
+            }[bot.status] || 'Unknown';
+
+            const card = document.createElement('div');
+            card.className = 'bot-card bg-white rounded-lg shadow-md p-4 relative overflow-hidden';
+            
+            card.innerHTML = `
+                <!-- Status Badge -->
+                <div class="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-medium text-white ${statusClass}">
+                    ${statusText}
+                </div>
+                
+                <!-- Main Bot Toggle -->
+                <div class="absolute top-2 left-2 flex items-center gap-1">
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${bot.isBotUtama ? 'checked' : ''} onchange="toggleBotUtama('${bot.id}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-xs text-purple-600 font-medium">Main</span>
+                </div>
+                
+                <!-- Bot Info -->
+                <div class="mt-8 mb-4">
+                    <h3 class="font-semibold text-gray-800 truncate">${bot.nameDevice}</h3>
+                    <p class="text-sm text-gray-600 truncate">API: ${bot.id}</p>
+                    ${bot.numberWa ? `<p class="text-sm text-green-600 truncate">📱 ${bot.numberWa}</p>` : ''}
+                    <p class="text-sm text-gray-500 truncate">👤 ${bot.ownerJadibotPhone}</p>
+                    ${bot.serverId ? `<p class="text-xs text-gray-400">Server: ${bot.serverId}</p>` : ''}
+                </div>
+
+                <!-- QR Code Area -->
+                <div class="qr-code-area mb-4">
+                    ${bot.status === 2 ? `
+                        <div class="qr-code bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                            <div class="qr-content">
+                                <button onclick="showQRCode('${bot.id}', this)" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
+                                    Show QR Code
+                                </button>
+                            </div>
+                        </div>
+                    ` : bot.status === 3 ? `
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                            <svg class="w-8 h-8 text-green-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <p class="text-sm text-green-600">Connected</p>
+                        </div>
+                    ` : bot.status === 1 ? `
+                        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                            <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-2"></div>
+                            <p class="text-sm text-orange-600">Pairing...</p>
+                        </div>
+                    ` : `
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                            </svg>
+                            <p class="text-sm text-gray-500">Offline</p>
+                        </div>
+                    `}
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-2">
+                    ${bot.status === 0 ? `
+                        <button onclick="startBot('${bot.id}')" class="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors">
+                            Start
+                        </button>
+                    ` : `
+                        <button onclick="stopBot('${bot.id}')" class="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors">
+                            Stop
+                        </button>
+                    `}
+                    
+                    <button onclick="deleteBot('${bot.id}')" class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors">
+                        🗑️
+                    </button>
+                    
+                    ${bot.status === 3 ? `
+                        <button onclick="logoutBot('${bot.id}')" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-md transition-colors">
+                            Logout
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+
+            return card;
+        }
+
+        // Show QR Code function
+        async function showQRCode(botId, buttonElement) {
+            const qrContent = buttonElement.parentElement;
+            
+            // Show loading state
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = `
+                <div class="flex items-center justify-center">
+                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                    Loading...
+                </div>
+            `;
+            
+            try {
+                const response = await axios.post('/api/get-qr', {
+                    username: userLogin,
+                    password: userPassword,
+                    botId: botId
+                });
+
+                if (response.data.success && response.data.scan) {
+                    const scanData = response.data.scan;
+                    
+                    if (scanData.type === 'qr') {
+                        // Display QR code image
+                        qrContent.innerHTML = `
+                            <div class="qr-display">
+                                <img src="${scanData.data}" alt="QR Code" class="w-32 h-32 mx-auto mb-2 rounded">
+                                <p class="text-sm text-gray-600 mb-2">Scan with WhatsApp</p>
+                                <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                                    Hide QR
+                                </button>
+                            </div>
+                        `;
+                    } else if (scanData.type === 'code') {
+                        // Display pairing code
+                        qrContent.innerHTML = `
+                            <div class="code-display">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                                    <p class="text-sm text-gray-600 mb-1">Pairing Code:</p>
+                                    <p class="text-lg font-mono font-bold text-blue-600 tracking-wider">${scanData.data}</p>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-2">Enter this code in WhatsApp</p>
+                                <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                                    Hide Code
+                                </button>
+                            </div>
+                        `;
+                    }
+                } else {
+                    throw new Error(response.data.message || 'Failed to get QR/Code data');
+                }
+            } catch (error) {
+                console.error('Failed to load QR code:', error);
+                qrContent.innerHTML = `
+                    <div class="text-center">
+                        <svg class="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm text-red-600 mb-2">Failed to load</p>
+                        <button onclick="showQRCode('${botId}', this)" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Hide QR Code function
+        function hideQRCode(botId, buttonElement) {
+            const qrContent = buttonElement.closest('.qr-content');
+            qrContent.innerHTML = `
+                <button onclick="showQRCode('${botId}', this)" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
+                    Show QR Code
+                </button>
+            `;
+        }
+
+        // Toggle bot utama
+        async function toggleBotUtama(botId, isBotUtama) {
+            try {
+                const response = await axios.post('/api/toggle-bot-utama', {
+                    username: userLogin,
+                    password: userPassword,
+                    botId: botId,
+                    isBotUtama: isBotUtama
+                });
+                
+                if (response.data.success) {
+                    showToast(`Bot ${isBotUtama ? 'set as' : 'removed from'} main bot successfully`, 'success');
+                    loadBots();
+                } else {
+                    showToast('Failed to toggle bot utama: ' + response.data.message, 'error');
+                    // Revert the toggle if failed
+                    const toggle = document.querySelector(`input[onchange*="${botId}"]`);
+                    if (toggle) toggle.checked = !isBotUtama;
+                }
+            } catch (error) {
+                showToast('Error toggling bot utama: ' + error.message, 'error');
+                // Revert the toggle if failed
+                const toggle = document.querySelector(`input[onchange*="${botId}"]`);
+                if (toggle) toggle.checked = !isBotUtama;
+            }
+        }
+
+        // Add new bot
+        async function addNewBot() {
+            const deviceName = document.getElementById('device-name').value.trim();
+            const ownerPhone = document.getElementById('owner-phone').value.trim();
+            const pairingMethod = document.getElementById('pairing-method').value;
+            const phoneNumber = document.getElementById('phone-number').value.trim();
+            const customApiKey = document.getElementById('custom-api-key').value.trim();
+            
+            if (!deviceName || !ownerPhone) {
+                showToast('Device name and owner phone are required', 'error');
+                return;
+            }
+            
+            if (pairingMethod === 'code' && !phoneNumber) {
+                showToast('Phone number is required for pairing code method', 'error');
+                return;
+            }
+            
+            try {
+                const response = await axios.post('/api/add-qr', {
+                    username: userLogin,
+                    password: userPassword,
+                    nameDevice: deviceName,
+                    ownerJadibotPhone: ownerPhone,
+                    methodPairing: pairingMethod,
+                    numberHp: pairingMethod === 'code' ? phoneNumber : '',
+                    costumApiKey: customApiKey || undefined
+                });
+                
+                if (response.data.success) {
+                    showToast('Bot added successfully', 'success');
+                    closeAddBotModal();
+                    loadBots();
+                } else {
+                    showToast('Failed to add bot: ' + response.data.message, 'error');
+                }
+            } catch (error) {
+                showToast('Error adding bot: ' + error.message, 'error');
+            }
+        }
+
+        // Modal functions
+        function showAddBotModal() {
+            document.getElementById('add-bot-modal').classList.remove('hidden');
+            document.getElementById('add-bot-modal').classList.add('flex');
+        }
+
+        function closeAddBotModal() {
+            document.getElementById('add-bot-modal').classList.add('hidden');
+            document.getElementById('add-bot-modal').classList.remove('flex');
+            // Reset form
+            document.getElementById('device-name').value = '';
+            document.getElementById('owner-phone').value = '';
+            document.getElementById('phone-number').value = '';
+            document.getElementById('custom-api-key').value = '';
+            document.getElementById('pairing-method').value = 'qr';
+            document.getElementById('phone-number-field').classList.add('hidden');
+        }
+
+        // Auto refresh
+        function startAutoRefresh() {
+            // Clear existing intervals
+            if (refreshInterval) clearInterval(refreshInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            countdown = 5;
+            document.getElementById('countdown').textContent = countdown;
+            
+            // Countdown interval
+            countdownInterval = setInterval(() => {
+                countdown--;
+                document.getElementById('countdown').textContent = countdown;
+                
+                if (countdown <= 0) {
+                    countdown = 5;
+                    loadBots();
+                }
+            }, 1000);
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Search
+            let searchTimeout;
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    searchQuery = e.target.value.trim();
+                    currentPage = 1;
+                    loadBots();
+                }, 500);
+            });
+
+            // Filters
+            document.getElementById('filter-status').addEventListener('change', (e) => {
+                filterStatus = e.target.value;
+                currentPage = 1;
+                loadBots();
+            });
+
+            document.getElementById('filter-bot-utama').addEventListener('change', (e) => {
+                filterBotUtama = e.target.checked;
+                currentPage = 1;
+                loadBots();
+            });
+
+            // Page size
+            document.getElementById('page-size').addEventListener('change', (e) => {
+                pageSize = parseInt(e.target.value);
+                currentPage = 1;
+                loadBots();
+            });
+
+            // Pagination
+            document.getElementById('prev-page').addEventListener('click', previousPage);
+            document.getElementById('next-page').addEventListener('click', nextPage);
+
+            // Add bot modal
+            document.getElementById('add-new-bot').addEventListener('click', showAddBotModal);
+            document.getElementById('close-modal').addEventListener('click', closeAddBotModal);
+            document.getElementById('cancel-add').addEventListener('click', closeAddBotModal);
+            document.getElementById('confirm-add').addEventListener('click', addNewBot);
+
+            // Pairing method change
+            document.getElementById('pairing-method').addEventListener('change', (e) => {
+                const phoneField = document.getElementById('phone-number-field');
+                if (e.target.value === 'code') {
+                    phoneField.classList.remove('hidden');
+                } else {
+                    phoneField.classList.add('hidden');
+                }
+            });
+
+            // Close modal on outside click
+            document.getElementById('add-bot-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'add-bot-modal') {
+                    closeAddBotModal();
+                }
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', authenticate);
+    </script>
+</body>
+</html>

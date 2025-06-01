@@ -1,0 +1,37 @@
+{
+  "name": "rem-comp-botwa-v3",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/RemComp/rem-comp-botwa-v3#readme",
+  "bugs": {
+    "url": "https://github.com/RemComp/rem-comp-botwa-v3/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RemComp/rem-comp-botwa-v3.git"
+  },
+  "license": "ISC",
+  "author": "DwiRizqiH",
+  "type": "commonjs",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "awesome-phonenumber": "^7.5.0",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "file-type": "^21.0.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "formidable": "^3.5.4",
+    "load-esm": "^1.0.2",
+    "mongoose": "^8.15.1",
+    "path": "^0.12.7",
+    "qrcode": "^1.5.4",
+    "snappy": "^7.2.2"
+  }
+}

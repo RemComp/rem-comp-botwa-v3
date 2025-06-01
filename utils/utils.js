@@ -1,3 +1,6 @@
+const { randomBytes } = require('crypto');
+const axios = require('axios');
+
 const base64RegExp = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
 const isBase64 = (str) => base64RegExp.test(str);
 const buildBase64Data = (mime, buffer) => {
@@ -188,6 +191,10 @@ function formatRequiredDataClient(rem, _userDb, _groupDb, message) {
 	}
 }
 
+function generateRandomString(length) {
+  return randomBytes(length / 2).toString('hex').slice(0, length);
+}
+
 module.exports = {
 	buildBase64Data,
 	isBase64,
@@ -200,5 +207,6 @@ module.exports = {
 	fixNumberE: fixNumberEPlus,
 	showElapsedTime,
 	shuffleArray,
-	formatRequiredDataClient
+	formatRequiredDataClient,
+	generateRandomString
 }
