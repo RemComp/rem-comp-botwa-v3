@@ -1,16 +1,31 @@
 const express = require('express');
 const path = require('path');
 const formidable = require('formidable');
+const QRCode = require('qrcode');
+
+const Logger = require('../utils/logger');
+global.log = new Logger();
+global.golangEngine = {
+    golangKey: process.env.ENGINE_GOLANG_KEY,
+    engineUrl: process.env.ENGINE_GOLANG_URL,
+    buildTime: process.env.ENGINE_GOLANG_BUILD_TIME,
+    version: process.env.ENGINE_GOLANG_VERSION,
+}
+if(!global.golangEngine.engineUrl || !global.golangEngine.buildTime || !global.golangEngine.version) {
+    global.log.error('Golang Engine is not initialized. Please check your environment variables.');
+    process.exit(0);
+}
 
 const { generateRandomString } = require('../utils/utils');
 const { addBot, startBot, stopBot, logoutBot } = require('../handlers/handlers');
 const { _mongo_JadibotDeviceSchema } = require('../lib/database');
 
+const app = express();
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-app.use(express.static(process.cwd() + '/src'));
+app.use(express.static(path.join(__dirname, 'src')));
 
-app.use('/api/*', async (req, res, next) => {
+app.use(/^\/api\/.*/, async (req, res, next) => {
     let { username, password } = req.body;
     if(!username && !password) {
         const form = formidable({ uploadDir: path.resolve(process.cwd(), 'upload') });
@@ -31,7 +46,7 @@ app.use('/api/*', async (req, res, next) => {
     }
     if(!password) return res.json({ success: false, message: 'Password is required' });
 
-    if (username === process.env.WEB_ADMIN_USERNAME && password === global.botSettings.admin_password) {
+    if (username === process.env.WEB_ADMIN_USERNAME && password === process.env.WEB_ADMIN_PASSWORD) {
         // req.user_permissions = permissions
         next();
     } /*else {
@@ -49,14 +64,14 @@ app.use('/api/*', async (req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(path.resolve(process.cwd(), 'src', 'index.html'));
+    res.sendFile('./src/index.html', { root: __dirname });
 });
 
 app.post('/api/auth', async (req, res) => {
     let { username, password } = req.body;
     if(!password) return res.json({ success: false, message: 'Password is required' });
 
-    if (username === process.env.WEB_ADMIN_USERNAME && password === global.botSettings.admin_password) {
+    if (username === process.env.WEB_ADMIN_USERNAME && password === process.env.WEB_ADMIN_PASSWORD) {
         return res.json({ success: true, message: 'Login success'/*, permissions: permissions*/ });
     } /*else {
         // search in database web_admin
@@ -87,6 +102,9 @@ app.post('/api/list-qr', async (req, res) => {
     }
     if(req.body.filterServerId) {
         searchQuery.serverId = req.body.filterServerId;
+    }
+    if(req.body.filterStatus) {
+        searchQuery.stateStatus = parseInt(req.body.filterStatus);
     }
     const devices = await _mongo_JadibotDeviceSchema.find(searchQuery)
         .skip((req.body.page - 1) * req.body.limit) // pagination
@@ -125,7 +143,7 @@ app.post('/api/add-qr', async (req, res) => {
     
     const checkErr = await addBot(apiKeyBot, nameDevice, undefined, ownerJadibotPhone, methodPairing, numberHp, false)
     if(checkErr.error) return res.status(400).json({ success: false, message: checkErr.message });
-    res.json({ success: true, message: 'Bot Added', botId: randomBotId });
+    res.json({ success: true, message: 'Bot Added', botId: apiKeyBot });
 });
 
 app.post('/api/start-qr', async (req, res) => {
@@ -148,7 +166,7 @@ app.post('/api/stop-qr', async (req, res) => {
     if(!device) return res.status(404).json({ success: false, message: 'Bot not found' });
 
     const checkErr = await stopBot(device.apiKey);
-    if(checkErr.error) return res.status(400).json({ success: false, message: checkErr.message });
+    if(checkErr.error && checkErr.error != 'not_connected') return res.status(400).json({ success: false, message: checkErr.message });
     res.json({ success: true, message: 'Bot stopped successfully' });
 });
 
@@ -218,6 +236,38 @@ app.post('/api/toggle-bot-utama', async (req, res) => {
         message: `Bot ${req.body.isBotUtama ? 'set as' : 'removed from'} utama successfully`,
         isBotUtama: device.isBotUtama
     });
+});
+
+app.post('/api/generate-qr', async (req, res) => {
+    try {
+        if(!req.body.data) {
+            return res.status(400).json({ success: false, message: 'data is required' });
+        }
+
+        const qrCodeDataURL = await QRCode.toDataURL(req.body.data, {
+            errorCorrectionLevel: 'M',
+            type: 'image/png',
+            quality: 0.92,
+            margin: 1,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            },
+            width: 200
+        });
+
+        res.json({
+            success: true,
+            message: 'QR Code generated successfully',
+            qrCode: qrCodeDataURL
+        });
+    } catch (error) {
+        console.error('QR Code generation error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate QR code'
+        });
+    }
 });
 
 app.listen(process.env.PORT || 3000, () => {

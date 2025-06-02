@@ -1,8 +1,10 @@
 const qr = require('qrcode')
+const snappy = require('snappy')
 
 const { sleep, requestToGolangEngine, formatRequiredDataClient } = require('../utils/utils')
 const { _mongo_JadibotDeviceSchema, _mongo_GroupSchema, _mongo_UserSchema, _mongo_ContactSchema, initGroupDb, initUserDb } = require('../lib/database')
 const clientHandler = require('./clientHandler')
+const messagesBeautify = require('./messages-beautify_whatsmeow')
 
 let listIntervalQrBulkEvent = {}
 let listRunningDevice = []
@@ -20,10 +22,12 @@ const disconnReasonParser = {
 	[402]: 'connection_banned_temp'
 }
 
+global.listBot = {}
 async function handleWebhookGolangEngine(payload) {
     if(!global.listBot?.[0]) await sleep(1000)
 
     let { apiKey, type, data, media, mediaKey, pollContent, pollVoteFiltered } = payload
+    global.log.info(`[${apiKey}] Received webhook event: ${type} with data: ${JSON.stringify(data)}`)
     let isChangeState = false
     let isChangedData = {}
     let codeCloseConnection = undefined
@@ -34,10 +38,15 @@ async function handleWebhookGolangEngine(payload) {
         stopBot(apiKey)
         return
     }
-    const rem = clientHandler(apiKey, {})
+    let rem = clientHandler(apiKey, {})
     let remSourceJadibot = null
     if(dataJadibot?.sourceJadibotApiKey) {
         remSourceJadibot = clientHandler(dataJadibot?.sourceJadibotApiKey, {})
+    }
+    if(!global.listBot[apiKey]) await syncDataDevice()
+    if(!global.listBot[apiKey]) {
+        global.log.error(`[${apiKey}] Error: apiKey not found in global.listBot`)
+        return
     }
 
     switch(type) {
@@ -71,10 +80,11 @@ async function handleWebhookGolangEngine(payload) {
 				listIntervalQrBulkEvent[apiKey] = null
 			}
 
+            let alreadyClosed = false
             async function sendQrBulkData(pos = 0) {
 				if(pos == data.length) return
                 if(!dataJadibot || (dataJadibot?.stateStatus === 3) || (dataJadibot?.stateStatus === 0)) return data = []
-				if(dataJadibot?.settings?.pairMethod === 'code') {
+				if((dataJadibot?.settings?.pairMethod === 'code') && (pos === 0)) {
 					if(!dataJadibot?.settings?.numberHp) {
 						global.log.error(`[${apiKey}] Error: numberHp not found`)
 
@@ -83,9 +93,12 @@ async function handleWebhookGolangEngine(payload) {
                         isChangedData.reasonDisconnected = 'pair_phone-numberHp_not_found'
                         await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
 
+                        data = []
 						stopBot(apiKey)
+                        alreadyClosed = true
                         return
 					}
+
                     const requestPairCode = await requestToGolangEngine('/session/pairphone', {
                         apiKey: apiKey,
                         phone: dataJadibot?.settings?.numberHp,
@@ -96,10 +109,13 @@ async function handleWebhookGolangEngine(payload) {
                         isChangedData.reasonDisconnected = 'pair_phone-' + requestPairCode.error
                         await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
 
-                        global.log.error(`[${apiKey}] Error pair phone:`, requestPairCode.error)
+                        global.log.error(`[${apiKey}] Error pair phone:`, requestPairCode.error, requestPairCode.message)
+                        data = []
                         stopBot(apiKey)
+                        alreadyClosed = true
                         return
                     }
+
                     try {
                         const base64ToText = JSON.parse(Buffer.from(requestPairCode.data, 'base64').toString('utf-8'))
 
@@ -120,10 +136,12 @@ async function handleWebhookGolangEngine(payload) {
                         isChangedData.reasonDisconnected = 'pair_phone-parse_base64_to_text_error'
                         await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
 
+                        data = []
                         stopBot(apiKey)
+                        alreadyClosed = true
                         return
                     }
-				} else {
+				} else if((dataJadibot?.settings?.pairMethod === 'qr')) {
                     qr.toDataURL(data[pos], async function (err, url) {
                         if(err) {
                             global.log.error(`[${apiKey}] Error generating QR code:`, err)
@@ -133,7 +151,9 @@ async function handleWebhookGolangEngine(payload) {
                             isChangedData.reasonDisconnected = 'pair_qr-' + err.message
                             await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
 
+                            data = []
                             stopBot(apiKey)
+                            alreadyClosed = true
                             return
                         }
 
@@ -150,8 +170,8 @@ async function handleWebhookGolangEngine(payload) {
 				}
 			}
 
-            if(!dataJadibot.sourceJadibotApiKey || !dataJadibot.ownerJadibotPhone) { // if scan but sourceJadibotApiKey or ownerJadibotPhone not found
-                global.log.error(`[${apiKey}] Error: sourceJadibotApiKey or ownerJadibotPhone not found, stopping bot...`)
+            if(!dataJadibot.ownerJadibotPhone) { // if scan but sourceJadibotApiKey or ownerJadibotPhone not found
+                global.log.error(`[${apiKey}] Error: ownerJadibotPhone not found, stopping bot...`)
                 return stopBot(apiKey)
             }
 
@@ -159,10 +179,10 @@ async function handleWebhookGolangEngine(payload) {
 			if(data.length > 1) {
 				let posCurrent = 1
 				listIntervalQrBulkEvent[apiKey] = setInterval(() => {
-					if((posCurrent == data.length)) {
+					if((posCurrent == data.length) || !data[posCurrent]) {
 						clearInterval(listIntervalQrBulkEvent[apiKey])
 						listIntervalQrBulkEvent[apiKey] = null
-						stopBot(apiKey)
+						if(!alreadyClosed) stopBot(apiKey)
 						return
 					}
 					sendQrBulkData(posCurrent)
@@ -357,6 +377,7 @@ async function handleWebhookGolangEngine(payload) {
 
             const message = messagesBeautify(apiKey, data, data, global.listBot[apiKey].user)
             if(message == {} || message == undefined || message == [] || message == '' || !message) return
+            if(!message.sender) return
 
             if(listIgnoreMessageType.includes(message.type) || message.type == 'protocolMessage' || message.type == 'pollUpdateMessage') return
             if(message.fromMe) return
@@ -424,11 +445,12 @@ async function handleWebhookGolangEngine(payload) {
                 message.type = 'listResponseMessage'
             }
 
-            const rem = clientHandler(apiKey, message, global.listBot[apiKey].user)
+            rem = clientHandler(apiKey, message, global.listBot[apiKey].user)
             const clientData = formatRequiredDataClient(rem, userDb, groupDb, message)
-            const passTo = global.listPlugin.filter(plugin => {
+
+            const passTo = global.listCommand.filter(plugin => {
                 if(!plugin?.cmd) return true
-                if(isPrefix && plugin?.cmd?.includes(command)) return true
+                if(clientData.isCmd && plugin?.cmd?.includes(clientData.command)) return true
                 return false
             }).sort((a, b) => a.priority - b.priority)
 
@@ -469,10 +491,11 @@ async function handleWebhookGolangEngine(payload) {
             break
     }
 
+    if(!global.listBot[apiKey]) await syncDataDevice()
     if(isChangeState !== false && isChangeState !== null && !isNaN(isChangeState) || (isChangedData && (JSON.stringify(isChangedData) !== '{}'))) {
         const changedData = isChangedData
         if(dataJadibot?.stateStatus !== isChangeState) {
-            global.listBot[apiKey].stateStatus = isChangeState
+            if(global.listBot[apiKey]) global.listBot[apiKey].stateStatus = isChangeState
             global.log.info(`[${apiKey}] State status changed to ${isChangeState}`)
 
             changedData.stateStatus = isChangeState
@@ -518,19 +541,25 @@ async function startBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPho
 	})
     if(responseStartDevice.error) {
         global.log.error(`[${apiKey}] Error start device:`, responseStartDevice.error)
-		global.listBot[apiKey].stateStatus = 0
+		if(global.listBot) global.listBot[apiKey].stateStatus = 0
 		return { error: responseStartDevice.error }
 	}
     return responseStartDevice
 }
 
-async function stopBot(apiKey, delObjSess = true) {
+async function stopBot(apiKey, delObjSess = false) {
     const responseStopDevice = await requestToGolangEngine('/session/disconnect', { apiKey, isDelKey: delObjSess })
-    if(responseStopDevice.error) {
+    if(responseStopDevice.error && responseStopDevice.error != 'not_connected') {
         global.log.error(`[${apiKey}] Error stop device:`, responseStopDevice.error)
         return { error: responseStopDevice.error }
     }
     global.log.info(`[${apiKey}] Device stopped successfully.`)
+
+    handleWebhookGolangEngine({
+        apiKey,
+        type: 'client_disconnect'
+    })
+
     return responseStopDevice
 }
 
@@ -576,7 +605,7 @@ async function addBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPhone
         return { error: 'failed to add new device to database' }
     }
 
-    global.listBot[apiKey] = newDeviceData
+    global.listBot[apiKey] = newDevice
     global.log.info(`[${apiKey}] Device added successfully.`)
     if(isStart) {
         const startResponse = await startBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPhone, pairMethod)
@@ -595,13 +624,11 @@ async function syncDataDevice() {
 		if(getDataStatus.error) throw new Error(getDataStatus.error)
 
 		const allDataStatus = Object.values(getDataStatus.data)
-        const missingApiKeys = []
+        const allSyncedApiKey = []
 		for(let i = 0; i < allDataStatus.length; i++) {
 			const dataStatus = allDataStatus[i]
 			if(!dataStatus) continue
-            if(!global.listBot[dataStatus.ApiKey]) {
-                missingApiKeys.push(dataStatus.ApiKey)
-            }
+            allSyncedApiKey.push(dataStatus.ApiKey)
 
 			const stateStatus = (dataStatus.Connected && dataStatus.LoggedIn) ? 3 : (dataStatus.Connected && dataStatus.QrCode) ? 2 : dataStatus.Connected ? 1 : 0
 			const jidGet = dataStatus.Jid || dataStatus.JID || ''
@@ -615,13 +642,6 @@ async function syncDataDevice() {
 					jid: formattedJidGet,
 				}
 			}
-            if(!global.listBot[dataStatus.ApiKey]?.user?.id) {
-                global.listBot[dataStatus.ApiKey].jid = jidGet
-                global.listBot[dataStatus.ApiKey].user = {
-                    id: jidGet,
-                    jid: formattedJidGet,
-                }
-            }
             if(!global.listBot[dataStatus.ApiKey]) {
                 const dataDevices = await _mongo_JadibotDeviceSchema.findOne({ apiKey: dataStatus.ApiKey })
                 if(!dataDevices) {
@@ -631,19 +651,26 @@ async function syncDataDevice() {
                 }
                 global.listBot[dataStatus.ApiKey] = Object.assign(dataDevices, setStatus)
             }
+            if(!global.listBot[dataStatus.ApiKey]?.user?.id) {
+                global.listBot[dataStatus.ApiKey].jid = jidGet
+                global.listBot[dataStatus.ApiKey].user = {
+                    id: jidGet,
+                    jid: formattedJidGet,
+                }
+            }
 			global.listBot[dataStatus.ApiKey] = Object.assign(global.listBot[dataStatus.ApiKey], setStatus)
 		}
 
         // delete data that not in allSyncedApiKey in the global.listBot
         global.listBot = Object.fromEntries(Object.entries(global.listBot).filter(([key]) => allSyncedApiKey.includes(key)))
 	} catch(e) {
-		global.log.error(`[${apiKey}] Error sync data device:`, e)
+		global.log.error(`Error sync data device:`, e)
 	}
 }
 
-if(process.env.CLIENT_ID) {
+if(!isNaN(process.env.CLIENT_ID)) {
     setInterval(() => {
-        if(!global.whapiGolang.engineUrl) return
+        if(!global.golangEngine.engineUrl) return
         syncDataDevice()
     }, 5000)
 }

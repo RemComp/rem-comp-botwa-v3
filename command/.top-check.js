@@ -13,13 +13,13 @@ const { getUserJobId, getLvlJob, getXpJob, addJobLvl, addJobMulti, getUserJob } 
 
 async function messageHandler (rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
     const { 
-        args, isCmd,
+        args, isCmd, prefix,
         isGroupAdmins, isBotGroupAdmins, isPrem, isSuperOwner, isOwner, isSideOwner, isAdmin, isMod, isBanned, isSuperBanned
     } = clientData
     let isUserDbChanged = false
 
     // double bot check
-    pushedCmdDb = { iId: message.sender, iIdM: message.id, time: Date.now(), cmd: args[0].replace(prefix, ''), type, body: args.join(' '), isVirtualBot: true, virtualBotId: rem.apiKey, botNumber: rem.user.jid || rem.user.id.split('@')[0].split(':')[0] + '@s.whatsapp.net', isGroup: message.isGroupMsg, meta: { isGroupAdmins, isBotGroupAdmins, isBanned, listCmdBan: _userDb?.listCmdBan || [], isSuperBanned, isBlocked: false, isSpamLevel: (_userDb?.antispam?.count >= 30), isSpamCmd: (_userDb?.antispam?.countcmd >= 15), isAfkOn: _userDb?.afk?.isAfk || false, isHideppOn: _userDb?.isHidePP, isPrem, isHavePd: _userDb.pd ? true : false, isAdmin, isMod, isSideOwner, isOwner, isUpOwner: isSuperOwner }, isQ: quotedMsg ? true : false, Q: {}, isErr: false, err: [], status: 'active' }
+    pushedCmdDb = { iId: message.sender, iIdM: message.id, time: Date.now(), cmd: args[0].replace(prefix, ''), type: message.type, body: args.join(' '), isVirtualBot: true, virtualBotId: rem.apiKey, botNumber: rem.user.jid || rem.user.id.split('@')[0].split(':')[0] + '@s.whatsapp.net', isGroup: message.isGroupMsg, meta: { isGroupAdmins, isBotGroupAdmins, isBanned, listCmdBan: _userDb?.listCmdBan || [], isSuperBanned, isBlocked: false, isSpamLevel: (_userDb?.antispam?.count >= 30), isSpamCmd: (_userDb?.antispam?.countcmd >= 15), isAfkOn: _userDb?.afk?.isAfk || false, isHideppOn: _userDb?.isHidePP, isPrem, isHavePd: _userDb.pd ? true : false, isAdmin, isMod, isSideOwner, isOwner, isUpOwner: isSuperOwner }, isQ: message.quotedMsg ? true : false, Q: {}, isErr: false, err: [], status: 'active' }
     try {
         if(isCmd) await _mongo_CommandMessageSchema.create(pushedCmdDb)
     } catch {
@@ -85,11 +85,11 @@ async function checkAntiSpam(rem, message, _userDb, _groupDb, _mentionUserDb, cl
 
     if((_userDb?.antispam?.count >= 30) && !isBanned && !isSuperBanned && !isCmd && isNaN(message.body)) { // spam message
         await _mongo_UserSchema.updateOne({ iId: sender }, { $set: { isBanned: true, timeBanned: Date.now() + toMs('4h'), bannedReason: 'Spam Pesan/Level' } })
-        rem.reply(from, 'Kamu terdeteksi spam!\n*Ban : 4jam*', id)
+        rem.reply(from, 'Kamu terdeteksi spam!\n*Ban : 4jam*')
         return 'break'
     } else if((_userDb?.antispam?.countcmd >= 15) && !isBanned && !isSuperBanned && isCmd) { // spam command
         await _mongo_UserSchema.updateOne({ iId: sender }, { $set: { isBanned: true, timeBanned: Date.now() + toMs('4h'), bannedReason: 'Spam Command/Level' } })
-        rem.reply(from, 'Kamu terdeteksi spam command!\n*Ban : 4jam*', id)
+        rem.reply(from, 'Kamu terdeteksi spam command!\n*Ban : 4jam*')
         return 'break'
     }
 
@@ -187,6 +187,8 @@ async function pdLevelHandler(rem, message, _userDb, _groupDb, _mentionUserDb, c
 }
 
 async function jobLevelHandler(rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
+    const { from, sender, pushname } = message
+
     if(getUserJobId(_userDb) == undefined) await setUserJob(sender)
     let currentJobLvl = getLvlJob(_userDb)
     const requiredJobXp = 1000 * (Math.pow(2, currentJobLvl) - 1)
@@ -207,7 +209,6 @@ async function jobLevelHandler(rem, message, _userDb, _groupDb, _mentionUserDb, 
             await addJobLvl(sender, xpJobLevelUpResult)
             await addJobMulti(sender, xpJobLevelUpResult)
 
-            if(config.isDebug) console.log(`${Date.now() - dateNowProccessIs}ms - Job Level Up [2]`)
             const getLevelJob = getLvlJob(_userDb)
 
             const userJob = getUserJob(_userDb)
@@ -227,7 +228,7 @@ async function jobLevelHandler(rem, message, _userDb, _groupDb, _mentionUserDb, 
             } else if(userJob == 'Kantoran') {
                 kerja = 'Kantoran'
             }
-            reply(from, `*「 JOB LVL UP 」*\n\n➤ *Name*: ${pushname}\n➤ *XP*: ${getXpJob(_userDb)}\n➤ *Level*: ${getLevelJob} -> ${Number(getLvlJob(_userDb)) + xpJobLevelUpResult}\n➤ *JOB*: ${kerja}\n\nOmedatou!! 🎉🎉`)
+            rem.reply(from, `*「 JOB LVL UP 」*\n\n➤ *Name*: ${pushname}\n➤ *XP*: ${getXpJob(_userDb)}\n➤ *Level*: ${getLevelJob} -> ${Number(getLvlJob(_userDb)) + xpJobLevelUpResult}\n➤ *JOB*: ${kerja}\n\nOmedatou!! 🎉🎉`)
         }
     } catch (err) {
         console.error(err)
@@ -235,6 +236,8 @@ async function jobLevelHandler(rem, message, _userDb, _groupDb, _mentionUserDb, 
 }
 
 async function afkHandler(rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
+    const { from, sender, pushname } = message
+    const { isCmd } = clientData
     if (message.isGroupMsg && message.mentionedJidList?.length != 0) {
         if (_mentionUserDb?.afk?.isAfk) {
             const getReason = _mentionUserDb?.afk?.reason
@@ -244,7 +247,7 @@ async function afkHandler(rem, message, _userDb, _groupDb, _mentionUserDb, clien
                 const contactDbAfk = await _mongo_ContactSchema.findOne({ iId: _mentionUserDb.iId })
                 nameRequestedAfk = rem.contacts(_mentionUserDb.iId, contactDbAfk)
             }
-            rem.sendText(from, `*「 AFK 」*\n\n${nameRequestedAfk}, Orangnya lagi afk!\n➤ *Alasan*: ${getReason}\n➤ *Sejak*: ${getTime}`, id)
+            rem.sendText(from, `*「 AFK 」*\n\n${nameRequestedAfk}, Orangnya lagi afk!\n➤ *Alasan*: ${getReason}\n➤ *Sejak*: ${getTime}`)
         }
     } else if (!isCmd) {
         const checking = _userDb?.afk?.isAfk
@@ -258,6 +261,8 @@ async function afkHandler(rem, message, _userDb, _groupDb, _mentionUserDb, clien
 }
 
 async function dbTimerUpdate(rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
+    const { from, sender } = message
+    
     let isChangedData = false
     if(_userDb?.timeBanned != 0 && Date.now() >= _userDb?.timeBanned) {
         await _mongo_UserSchema.updateOne({ iId: sender }, { $set: { isBanned: false, listCmdBan: [], timeBanned: 0, bannedReason: '' } })

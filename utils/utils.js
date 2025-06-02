@@ -1,6 +1,8 @@
 const { randomBytes } = require('crypto');
 const axios = require('axios');
 
+const { ownerNumber, ownerNumber2, sideOwnerNumber } = require('../lib/constants');
+
 const base64RegExp = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
 const isBase64 = (str) => base64RegExp.test(str);
 const buildBase64Data = (mime, buffer) => {
@@ -10,12 +12,12 @@ const buildBase64Data = (mime, buffer) => {
 
 async function requestToGolangEngine(path, data, options = {}) {
 	try {
-		if(!global.golangEngine.url) {
+		if(!global.golangEngine.engineUrl) {
 			global.log?.error(`Golang engine URL is not set. Please ensure the engine is initialized.`);
 			return new Error('whatsmeowerr_engine_not_ready')
 		}
 
-		const response = await axios.post(`${global.golangEngine.url}${path}`, { data }, Object.assign({ validateStatus: () => true }, options))
+		const response = await axios.post(`${global.golangEngine.engineUrl}${path}`, { accessKey: global.golangEngine.golangKey, data: JSON.stringify(data) }, Object.assign({ validateStatus: () => true }, options))
 		return response.data
 	} catch(e) {
 		console.error(`Error request to golang engine:`, e.message)
@@ -138,21 +140,24 @@ function shuffleArray(array) {
 
 function formatRequiredDataClient(rem, _userDb, _groupDb, message) {
 	const botNumber = rem.user.jid
-	const groupAdmins = message.isGroupMsg && _groupDb?.metadata ? _groupDb?.metadata.filter(admn => admn.admin != null).map(admn2 => admn2.id) : ''
+	const groupAdmins = message.isGroupMsg && _groupDb?.metadata ? _groupDb?.metadata.participants.filter(admn => admn.admin != null).map(admn2 => admn2.id) : ''
 	const isGroupAdmins = message.isGroupMsg ? groupAdmins.includes(message.sender) : false
 	const isBotGroupAdmins = message.isGroupMsg ? groupAdmins.includes(botNumber) : false
 
 	const isBanned = _userDb.isBanned || false
 	const isSuperBanned = _userDb.isSuperBanned || false
 	const isPrem = _userDb.isPremium
-	const isSuperOwner = ownerNumber.includes(sender)
-	const isOwner = ownerNumber2.includes(sender)
-	const isSideOwner = sideOwnerNumber.includes(sender)
+	const isSuperOwner = ownerNumber.includes(message.sender)
+	const isOwner = ownerNumber2.includes(message.sender)
+	const isSideOwner = sideOwnerNumber.includes(message.sender)
 	const isAdmin = _userDb.isAdmin || isSideOwner || isOwner || isSuperOwner
 	const isMod = _userDb.rl.isMod || isSideOwner || isOwner || isSuperOwner
 
+	const body = message.body || ''
+	const caption = message.caption || ''
+
 	let prefix = '.'
-	if(isGroupMsg) {
+	if(message.isGroupMsg) {
 		prefix = _groupDb?.prefix || '.'
 	} else {
 		if(body != undefined ? body.startsWith('!') : false) {
@@ -181,12 +186,13 @@ function formatRequiredDataClient(rem, _userDb, _groupDb, message) {
 	} else if(message.selectedRowId != undefined && message.selectedRowId.startsWith(prefix)) {
 		allArgs = message.selectedRowId.split(' ') || ''
 	} else {
-		allArgs = commands.split(' ') || ''
+		allArgs = args || ''
 	}
 	const isCmd = allArgs[0].toLowerCase().startsWith(prefix)
+	const command = isCmd ? allArgs[0].slice(prefix.length).toLowerCase() : ''
 
 	return {
-		prefix, args, allArgs, isCmd,
+		prefix, args, allArgs, isCmd, command,
 		isGroupAdmins, isBotGroupAdmins, isPrem, isSuperOwner, isOwner, isSideOwner, isAdmin, isMod, isBanned, isSuperBanned
 	}
 }

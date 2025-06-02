@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot QR Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Rem Comp</title>
+    <script src="tailwind-css.js"></script>
+    <script src="jquery-3.7.1.min.js"></script>
     <link rel="icon" type="image/x-icon" href="https://apipedia.id/lovable-uploads/65a3df08-7402-40d2-9278-5f5a8ebc0bf9.png">
     
     <style>
@@ -24,11 +25,68 @@
         }
         .bot-card {
             transition: all 0.3s ease;
+            height: 420px; /* Fixed height for consistency */
+            display: flex;
+            flex-direction: column;
+            padding: 16px; /* Consistent padding */
         }
         .bot-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
+        
+        /* Ensure consistent spacing within cards */
+        .bot-info {
+            min-height: 80px; /* Fixed height for bot info section */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            margin-top: 32px; /* Space for toggles and badges */
+            margin-bottom: 16px; /* Consistent bottom margin */
+        }
+        
+        .qr-code-area {
+            flex: 1; /* Takes remaining space */
+            display: flex;
+            align-items: center;
+            min-height: 200px; /* Minimum height for QR area */
+            margin-bottom: 16px; /* Consistent margin with top */
+        }
+        
+        .qr-code {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .action-buttons {
+            min-height: 40px; /* Fixed height for action buttons */
+            margin-top: auto; /* Push to bottom */
+        }
+        
+        /* Consistent QR code and content sizing */
+        .qr-display img {
+            width: 120px !important;
+            height: 120px !important;
+        }
+        
+        .code-display, .status-display, .offline-display {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px;
+        }
+        
+        /* Center the Hide QR button */
+        .qr-display {
+            text-align: center;
+        }
+        
         .status-offline {
             background: linear-gradient(45deg, #6b7280, #4b5563);
         }
@@ -86,7 +144,7 @@
     <!-- Header -->
     <div class="bg-white shadow-md p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800">Bot QR Manager</h1>
+            <h1 class="text-2xl font-bold text-gray-800">RemCp. Session Manager</h1>
             <div class="flex items-center gap-2 bg-blue-100 px-3 py-1.5 rounded-lg">
                 <svg id="refresh-icon" class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s1.343-9 3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
@@ -288,22 +346,21 @@
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.0/axios.min.js"></script>
     <script>
         let userLogin = '';
         let userPassword = '';
         let currentPage = 1;
-        let pageSize = 20; // Changed default to 20
+        let pageSize = 20;
         let searchQuery = '';
         let filterStatus = '';
         let filterBotUtama = false;
         let refreshInterval;
         let countdownInterval;
         let countdown = 5;
+        let qrVisibilityState = {}; // Track which bots have QR codes shown
 
         // Toast notification system
         function showToast(message, type = 'success') {
-            const toastContainer = document.getElementById('toast-container');
             const toastId = Date.now();
             
             const colors = {
@@ -313,25 +370,24 @@
                 info: 'bg-blue-500'
             };
             
-            const toast = document.createElement('div');
-            toast.id = `toast-${toastId}`;
-            toast.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
-            toast.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <span>${message}</span>
-                    <button onclick="removeToast('${toastId}')" class="ml-2 text-white hover:text-gray-200">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path>
-                        </svg>
-                    </button>
+            const toast = $(`
+                <div id="toast-${toastId}" class="${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full">
+                    <div class="flex items-center justify-between">
+                        <span>${message}</span>
+                        <button onclick="removeToast('${toastId}')" class="ml-2 text-white hover:text-gray-200">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-            `;
+            `);
             
-            toastContainer.appendChild(toast);
+            $('#toast-container').append(toast);
             
             // Animate in
             setTimeout(() => {
-                toast.classList.remove('translate-x-full');
+                toast.removeClass('translate-x-full');
             }, 100);
             
             // Auto remove after 5 seconds
@@ -341,9 +397,9 @@
         }
 
         function removeToast(toastId) {
-            const toast = document.getElementById(`toast-${toastId}`);
-            if (toast) {
-                toast.classList.add('translate-x-full');
+            const toast = $(`#toast-${toastId}`);
+            if (toast.length) {
+                toast.addClass('translate-x-full');
                 setTimeout(() => {
                     toast.remove();
                 }, 300);
@@ -356,20 +412,25 @@
             userPassword = prompt('Enter Password:');
 
             try {
-                const response = await axios.post('/api/auth', { 
-                    username: userLogin, 
-                    password: userPassword 
+                const response = await $.ajax({
+                    url: '/api/auth',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword
+                    })
                 });
                 
-                if (response.data.success) {
-                    document.getElementById('admin-body').style.display = 'block';
+                if (response.success) {
+                    $('#admin-body').show();
                     initializeApp();
                 } else {
-                    alert('Authentication failed: ' + response.data.message);
+                    alert('Authentication failed: ' + response.message);
                     location.reload();
                 }
             } catch (error) {
-                alert('Authentication error: ' + error.message);
+                alert('Authentication error: ' + error.responseJSON?.message || error.message);
                 location.reload();
             }
         }
@@ -381,36 +442,63 @@
             setupEventListeners();
         }
 
+        // Clean up visibility state when bot status changes from scanning
+        function cleanupQRVisibilityState(bots) {
+            Object.keys(qrVisibilityState).forEach(botId => {
+                const bot = bots.find(b => b.id === botId);
+                if (!bot || bot.status !== 2) {
+                    delete qrVisibilityState[botId];
+                }
+            });
+        }
+
         // Load bots with pagination
         async function loadBots() {
             try {
-                const response = await axios.post('/api/list-qr', {
-                    username: userLogin,
-                    password: userPassword,
-                    page: currentPage,
-                    limit: pageSize,
-                    search: searchQuery,
-                    filterBotUtama: filterBotUtama
+                const response = await $.ajax({
+                    url: '/api/list-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        page: currentPage,
+                        limit: pageSize,
+                        search: searchQuery,
+                        filterBotUtama: filterBotUtama,
+                        filterStatus: filterStatus
+                    })
                 });
 
-                if (response.data.success) {
-                    displayBots(response.data.listQr);
-                    updateStats(response.data.listQr);
-                    updatePagination(response.data.totalCount, response.data.totalPage);
+                if (response.success) {
+                    cleanupQRVisibilityState(response.listQr);
+                    displayBots(response.listQr);
+                    updateStats(response.listQr);
+                    updatePagination(response.totalCount, response.totalPage);
                 }
             } catch (error) {
-                showToast('Failed to load bots: ' + error.message, 'error');
+                showToast('Failed to load bots: ' + (error.responseJSON?.message || error.message), 'error');
             }
         }
 
         // Display bots
         function displayBots(bots) {
-            const container = document.getElementById('bot-container');
-            container.innerHTML = '';
+            const container = $('#bot-container');
+            container.empty();
 
             bots.forEach(bot => {
                 const botCard = createBotCard(bot);
-                container.appendChild(botCard);
+                container.append(botCard);
+                
+                // Auto-load QR if it was previously shown and status is scanning
+                if (qrVisibilityState[bot.id] && bot.status === 2) {
+                    setTimeout(() => {
+                        const autoLoadingElement = botCard.find('.auto-loading-qr');
+                        if (autoLoadingElement.length) {
+                            loadQRCodeAutomatically(bot.id, autoLoadingElement);
+                        }
+                    }, 100);
+                }
             });
         }
 
@@ -430,148 +518,178 @@
                 3: 'Connected'
             }[bot.status] || 'Unknown';
 
-            const card = document.createElement('div');
-            card.className = 'bot-card bg-white rounded-lg shadow-md p-4 relative overflow-hidden';
-            
-            card.innerHTML = `
-                <!-- Status Badge -->
-                <div class="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-medium text-white ${statusClass}">
-                    ${statusText}
-                </div>
-                
-                <!-- Main Bot Toggle -->
-                <div class="absolute top-2 left-2 flex items-center gap-1">
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${bot.isBotUtama ? 'checked' : ''} onchange="toggleBotUtama('${bot.id}', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span class="text-xs text-purple-600 font-medium">Main</span>
-                </div>
-                
-                <!-- Bot Info -->
-                <div class="mt-8 mb-4">
-                    <h3 class="font-semibold text-gray-800 truncate">${bot.nameDevice}</h3>
-                    <p class="text-sm text-gray-600 truncate">API: ${bot.id}</p>
-                    ${bot.numberWa ? `<p class="text-sm text-green-600 truncate">📱 ${bot.numberWa}</p>` : ''}
-                    <p class="text-sm text-gray-500 truncate">👤 ${bot.ownerJadibotPhone}</p>
-                    ${bot.serverId ? `<p class="text-xs text-gray-400">Server: ${bot.serverId}</p>` : ''}
-                </div>
+            // Check if QR should be auto-displayed
+            const shouldShowQR = qrVisibilityState[bot.id] && bot.status === 2;
 
-                <!-- QR Code Area -->
-                <div class="qr-code-area mb-4">
-                    ${bot.status === 2 ? `
-                        <div class="qr-code bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                            <div class="qr-content">
-                                <button onclick="showQRCode('${bot.id}', this)" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
-                                    Show QR Code
-                                </button>
+            return $(`
+                <div class="bot-card bg-white rounded-lg shadow-md relative overflow-hidden">
+                    <!-- Status Badge -->
+                    <div class="absolute top-4 right-4 px-2 py-1 rounded-full text-xs font-medium text-white ${statusClass}">
+                        ${statusText}
+                    </div>
+                    
+                    <!-- Main Bot Toggle -->
+                    <div class="absolute top-4 left-4 flex items-center gap-1">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${bot.isBotUtama ? 'checked' : ''} onchange="toggleBotUtama('${bot.id}', this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="text-xs text-purple-600 font-medium">Main</span>
+                    </div>
+                    
+                    <!-- Bot Info -->
+                    <div class="bot-info">
+                        <div>
+                            <h3 class="font-semibold text-gray-800 truncate">${bot.nameDevice}</h3>
+                            <p class="text-sm text-gray-600 truncate">API: ${bot.id}</p>
+                            ${bot.numberWa ? `<p class="text-sm text-green-600 truncate">📱 ${bot.numberWa}</p>` : ''}
+                            <p class="text-sm text-gray-500 truncate">👤 ${bot.ownerJadibotPhone}</p>
+                            ${bot.serverId ? `<p class="text-xs text-gray-400">Server: ${bot.serverId}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- QR Code Area -->
+                    <div class="qr-code-area">
+                        ${bot.status === 2 ? `
+                            <div class="qr-code bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
+                                <div class="qr-content">
+                                    ${shouldShowQR ? `
+                                        <div class="auto-loading-qr status-display">
+                                            <div class="flex items-center justify-center">
+                                                <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
+                                                Loading QR...
+                                            </div>
+                                        </div>
+                                    ` : `
+                                        <div class="status-display">
+                                            <button onclick="showQRCode('${bot.id}', this)" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
+                                                Show QR Code
+                                            </button>
+                                        </div>
+                                    `}
+                                </div>
                             </div>
-                        </div>
-                    ` : bot.status === 3 ? `
-                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                            <svg class="w-8 h-8 text-green-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <p class="text-sm text-green-600">Connected</p>
-                        </div>
-                    ` : bot.status === 1 ? `
-                        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
-                            <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-2"></div>
-                            <p class="text-sm text-orange-600">Pairing...</p>
-                        </div>
-                    ` : `
-                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                            </svg>
-                            <p class="text-sm text-gray-500">Offline</p>
-                        </div>
-                    `}
-                </div>
+                        ` : bot.status === 3 ? `
+                            <div class="qr-code bg-green-50 border border-green-200 rounded-lg">
+                                <div class="status-display">
+                                    <svg class="w-8 h-8 text-green-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-sm text-green-600">Connected</p>
+                                </div>
+                            </div>
+                        ` : bot.status === 1 ? `
+                            <div class="qr-code bg-orange-50 border border-orange-200 rounded-lg">
+                                <div class="status-display">
+                                    <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-2"></div>
+                                    <p class="text-sm text-orange-600">Pairing...</p>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="qr-code bg-gray-50 border border-gray-200 rounded-lg">
+                                <div class="offline-display">
+                                    <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                                    </svg>
+                                    <p class="text-sm text-gray-500">Offline</p>
+                                </div>
+                            </div>
+                        `}
+                    </div>
 
-                <!-- Action Buttons -->
-                <div class="flex gap-2">
-                    ${bot.status === 0 ? `
-                        <button onclick="startBot('${bot.id}')" class="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors">
-                            Start
+                    <!-- Action Buttons -->
+                    <div class="action-buttons flex gap-2">
+                        ${bot.status === 0 ? `
+                            <button onclick="startBot('${bot.id}')" class="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors">
+                                Start
+                            </button>
+                        ` : `
+                            <button onclick="stopBot('${bot.id}')" class="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors">
+                                Stop
+                            </button>
+                        `}
+                        
+                        <button onclick="deleteBot('${bot.id}')" class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors">
+                            🗑️
                         </button>
-                    ` : `
-                        <button onclick="stopBot('${bot.id}')" class="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors">
-                            Stop
-                        </button>
-                    `}
-                    
-                    <button onclick="deleteBot('${bot.id}')" class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors">
-                        🗑️
-                    </button>
-                    
-                    ${bot.status === 3 ? `
-                        <button onclick="logoutBot('${bot.id}')" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-md transition-colors">
-                            Logout
-                        </button>
-                    ` : ''}
+                        
+                        ${bot.status === 3 ? `
+                            <button onclick="logoutBot('${bot.id}')" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-md transition-colors">
+                                Logout
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
-            `;
-
-            return card;
+            `);
         }
 
-        // Show QR Code function
-        async function showQRCode(botId, buttonElement) {
-            const qrContent = buttonElement.parentElement;
-            
-            // Show loading state
-            buttonElement.disabled = true;
-            buttonElement.innerHTML = `
-                <div class="flex items-center justify-center">
-                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                    Loading...
-                </div>
-            `;
-            
+        // Auto-load QR code for bots that had it shown previously
+        async function loadQRCodeAutomatically(botId, loadingElement) {
             try {
-                const response = await axios.post('/api/get-qr', {
-                    username: userLogin,
-                    password: userPassword,
-                    botId: botId
+                const response = await $.ajax({
+                    url: '/api/get-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
                 });
 
-                if (response.data.success && response.data.scan) {
-                    const scanData = response.data.scan;
+                if (response.success && response.scan) {
+                    const scanData = response.scan;
+                    const $qrContent = loadingElement.parent();
                     
                     if (scanData.type === 'qr') {
-                        // Display QR code image
-                        qrContent.innerHTML = `
-                            <div class="qr-display">
-                                <img src="${scanData.data}" alt="QR Code" class="w-32 h-32 mx-auto mb-2 rounded">
-                                <p class="text-sm text-gray-600 mb-2">Scan with WhatsApp</p>
-                                <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
-                                    Hide QR
-                                </button>
-                            </div>
-                        `;
+                        // Generate QR code using internal API
+                        const qrResponse = await $.ajax({
+                            url: '/api/generate-qr',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                username: userLogin,
+                                password: userPassword,
+                                data: scanData.code
+                            })
+                        });
+
+                        if (qrResponse.success) {
+                            $qrContent.html(`
+                                <div class="qr-display">
+                                    <img src="${qrResponse.qrCode}" alt="QR Code" class="mx-auto mb-2 rounded">
+                                    <p class="text-sm text-gray-600 mb-2">Scan with WhatsApp</p>
+                                    <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                                        Hide QR
+                                    </button>
+                                </div>
+                            `);
+                        } else {
+                            throw new Error('Failed to generate QR code');
+                        }
                     } else if (scanData.type === 'code') {
                         // Display pairing code
-                        qrContent.innerHTML = `
+                        $qrContent.html(`
                             <div class="code-display">
                                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
                                     <p class="text-sm text-gray-600 mb-1">Pairing Code:</p>
-                                    <p class="text-lg font-mono font-bold text-blue-600 tracking-wider">${scanData.data}</p>
+                                    <p class="text-lg font-mono font-bold text-blue-600 tracking-wider">${scanData.code}</p>
                                 </div>
                                 <p class="text-xs text-gray-500 mb-2">Enter this code in WhatsApp</p>
                                 <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
                                     Hide Code
                                 </button>
                             </div>
-                        `;
+                        `);
                     }
                 } else {
-                    throw new Error(response.data.message || 'Failed to get QR/Code data');
+                    throw new Error(response.message || 'Failed to get QR/Code data');
                 }
             } catch (error) {
-                console.error('Failed to load QR code:', error);
-                qrContent.innerHTML = `
-                    <div class="text-center">
+                console.error('Failed to auto-load QR code:', error);
+                const $qrContent = loadingElement.parent();
+                $qrContent.html(`
+                    <div class="status-display">
                         <svg class="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
@@ -580,54 +698,154 @@
                             Retry
                         </button>
                     </div>
-                `;
+                `);
+            }
+        }
+
+        // Show QR Code function
+        async function showQRCode(botId, buttonElement) {
+            const $button = $(buttonElement);
+            const $qrContent = $button.parent();
+            
+            // Mark this bot as having QR shown
+            qrVisibilityState[botId] = true;
+            
+            // Show loading state
+            $button.prop('disabled', true);
+            $button.html(`
+                <div class="flex items-center justify-center">
+                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                    Loading...
+                </div>
+            `);
+            
+            try {
+                const response = await $.ajax({
+                    url: '/api/get-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
+                });
+
+                if (response.success && response.scan) {
+                    const scanData = response.scan;
+                    
+                    if (scanData.type === 'qr') {
+                        // Generate QR code using internal API
+                        const qrResponse = await $.ajax({
+                            url: '/api/generate-qr',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                username: userLogin,
+                                password: userPassword,
+                                data: scanData.code
+                            })
+                        });
+
+                        if (qrResponse.success) {
+                            $qrContent.html(`
+                                <div class="qr-display">
+                                    <img src="${qrResponse.qrCode}" alt="QR Code" class="mx-auto mb-2 rounded">
+                                    <p class="text-sm text-gray-600 mb-2">Scan with WhatsApp</p>
+                                    <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                                        Hide QR
+                                    </button>
+                                </div>
+                            `);
+                        } else {
+                            throw new Error('Failed to generate QR code');
+                        }
+                    } else if (scanData.type === 'code') {
+                        // Display pairing code
+                        $qrContent.html(`
+                            <div class="code-display">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                                    <p class="text-sm text-gray-600 mb-1">Pairing Code:</p>
+                                    <p class="text-lg font-mono font-bold text-blue-600 tracking-wider">${scanData.code}</p>
+                                </div>
+                                <p class="text-xs text-gray-500 mb-2">Enter this code in WhatsApp</p>
+                                <button onclick="hideQRCode('${botId}', this)" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                                    Hide Code
+                                </button>
+                            </div>
+                        `);
+                    }
+                } else {
+                    throw new Error(response.message || 'Failed to get QR/Code data');
+                }
+            } catch (error) {
+                console.error('Failed to load QR code:', error);
+                $qrContent.html(`
+                    <div class="status-display">
+                        <svg class="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm text-red-600 mb-2">Failed to load</p>
+                        <button onclick="showQRCode('${botId}', this)" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors">
+                            Retry
+                        </button>
+                    </div>
+                `);
             }
         }
 
         // Hide QR Code function
         function hideQRCode(botId, buttonElement) {
-            const qrContent = buttonElement.closest('.qr-content');
-            qrContent.innerHTML = `
-                <button onclick="showQRCode('${botId}', this)" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
-                    Show QR Code
-                </button>
-            `;
+            // Remove from visibility state
+            delete qrVisibilityState[botId];
+            
+            const $qrContent = $(buttonElement).closest('.qr-content');
+            $qrContent.html(`
+                <div class="status-display">
+                    <button onclick="showQRCode('${botId}', this)" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors">
+                        Show QR Code
+                    </button>
+                </div>
+            `);
         }
 
         // Toggle bot utama
         async function toggleBotUtama(botId, isBotUtama) {
             try {
-                const response = await axios.post('/api/toggle-bot-utama', {
-                    username: userLogin,
-                    password: userPassword,
-                    botId: botId,
-                    isBotUtama: isBotUtama
+                const response = await $.ajax({
+                    url: '/api/toggle-bot-utama',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId,
+                        isBotUtama: isBotUtama
+                    })
                 });
                 
-                if (response.data.success) {
+                if (response.success) {
                     showToast(`Bot ${isBotUtama ? 'set as' : 'removed from'} main bot successfully`, 'success');
                     loadBots();
                 } else {
-                    showToast('Failed to toggle bot utama: ' + response.data.message, 'error');
+                    showToast('Failed to toggle bot utama: ' + response.message, 'error');
                     // Revert the toggle if failed
-                    const toggle = document.querySelector(`input[onchange*="${botId}"]`);
-                    if (toggle) toggle.checked = !isBotUtama;
+                    $(`input[onchange*="${botId}"]`).prop('checked', !isBotUtama);
                 }
             } catch (error) {
-                showToast('Error toggling bot utama: ' + error.message, 'error');
+                showToast('Error toggling bot utama: ' + (error.responseJSON?.message || error.message), 'error');
                 // Revert the toggle if failed
-                const toggle = document.querySelector(`input[onchange*="${botId}"]`);
-                if (toggle) toggle.checked = !isBotUtama;
+                $(`input[onchange*="${botId}"]`).prop('checked', !isBotUtama);
             }
         }
 
         // Add new bot
         async function addNewBot() {
-            const deviceName = document.getElementById('device-name').value.trim();
-            const ownerPhone = document.getElementById('owner-phone').value.trim();
-            const pairingMethod = document.getElementById('pairing-method').value;
-            const phoneNumber = document.getElementById('phone-number').value.trim();
-            const customApiKey = document.getElementById('custom-api-key').value.trim();
+            const deviceName = $('#device-name').val().trim();
+            const ownerPhone = $('#owner-phone').val().trim();
+            const pairingMethod = $('#pairing-method').val();
+            const phoneNumber = $('#phone-number').val().trim();
+            const customApiKey = $('#custom-api-key').val().trim();
             
             if (!deviceName || !ownerPhone) {
                 showToast('Device name and owner phone are required', 'error');
@@ -640,44 +858,44 @@
             }
             
             try {
-                const response = await axios.post('/api/add-qr', {
-                    username: userLogin,
-                    password: userPassword,
-                    nameDevice: deviceName,
-                    ownerJadibotPhone: ownerPhone,
-                    methodPairing: pairingMethod,
-                    numberHp: pairingMethod === 'code' ? phoneNumber : '',
-                    costumApiKey: customApiKey || undefined
+                const response = await $.ajax({
+                    url: '/api/add-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        nameDevice: deviceName,
+                        ownerJadibotPhone: ownerPhone,
+                        methodPairing: pairingMethod,
+                        numberHp: pairingMethod === 'code' ? phoneNumber : '',
+                        costumApiKey: customApiKey || undefined
+                    })
                 });
                 
-                if (response.data.success) {
+                if (response.success) {
                     showToast('Bot added successfully', 'success');
                     closeAddBotModal();
                     loadBots();
                 } else {
-                    showToast('Failed to add bot: ' + response.data.message, 'error');
+                    showToast('Failed to add bot: ' + response.message, 'error');
                 }
             } catch (error) {
-                showToast('Error adding bot: ' + error.message, 'error');
+                showToast('Error adding bot: ' + (error.responseJSON?.message || error.message), 'error');
             }
         }
 
         // Modal functions
         function showAddBotModal() {
-            document.getElementById('add-bot-modal').classList.remove('hidden');
-            document.getElementById('add-bot-modal').classList.add('flex');
+            $('#add-bot-modal').removeClass('hidden').addClass('flex');
         }
 
         function closeAddBotModal() {
-            document.getElementById('add-bot-modal').classList.add('hidden');
-            document.getElementById('add-bot-modal').classList.remove('flex');
+            $('#add-bot-modal').addClass('hidden').removeClass('flex');
             // Reset form
-            document.getElementById('device-name').value = '';
-            document.getElementById('owner-phone').value = '';
-            document.getElementById('phone-number').value = '';
-            document.getElementById('custom-api-key').value = '';
-            document.getElementById('pairing-method').value = 'qr';
-            document.getElementById('phone-number-field').classList.add('hidden');
+            $('#device-name, #owner-phone, #phone-number, #custom-api-key').val('');
+            $('#pairing-method').val('qr');
+            $('#phone-number-field').addClass('hidden');
         }
 
         // Auto refresh
@@ -687,12 +905,12 @@
             if (countdownInterval) clearInterval(countdownInterval);
             
             countdown = 5;
-            document.getElementById('countdown').textContent = countdown;
+            $('#countdown').text(countdown);
             
             // Countdown interval
             countdownInterval = setInterval(() => {
                 countdown--;
-                document.getElementById('countdown').textContent = countdown;
+                $('#countdown').text(countdown);
                 
                 if (countdown <= 0) {
                     countdown = 5;
@@ -701,61 +919,230 @@
             }, 1000);
         }
 
+        // Update stats
+        function updateStats(bots) {
+            const stats = {
+                total: bots.length,
+                connected: bots.filter(bot => bot.status === 3).length,
+                scanning: bots.filter(bot => bot.status === 2).length,
+                offline: bots.filter(bot => bot.status === 0).length
+            };
+            
+            $('#stat-total').text(stats.total);
+            $('#stat-connected').text(stats.connected);
+            $('#stat-scanning').text(stats.scanning);
+            $('#stat-offline').text(stats.offline);
+        }
+
+        // Pagination functions
+        function updatePagination(totalCount, totalPages) {
+            $('#total-items').text(totalCount);
+            $('#showing-start').text(totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0);
+            $('#showing-end').text(Math.min(currentPage * pageSize, totalCount));
+            
+            // Update pagination buttons
+            $('#prev-page').prop('disabled', currentPage <= 1);
+            $('#next-page').prop('disabled', currentPage >= totalPages);
+            
+            // Update page numbers
+            const $pageNumbers = $('#page-numbers');
+            $pageNumbers.empty();
+            
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const $pageButton = $(`
+                    <button class="px-3 py-1 border rounded-md ${i === currentPage ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-50'}">
+                        ${i}
+                    </button>
+                `);
+                $pageButton.on('click', () => goToPage(i));
+                $pageNumbers.append($pageButton);
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadBots();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
+            loadBots();
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadBots();
+        }
+
+        // Bot action functions
+        async function startBot(botId) {
+            try {
+                const response = await $.ajax({
+                    url: '/api/start-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
+                });
+                
+                if (response.success) {
+                    showToast('Bot started successfully', 'success');
+                    loadBots();
+                } else {
+                    showToast('Failed to start bot: ' + response.message, 'error');
+                }
+            } catch (error) {
+                showToast('Error starting bot: ' + (error.responseJSON?.message || error.message), 'error');
+            }
+        }
+
+        async function stopBot(botId) {
+            try {
+                const response = await $.ajax({
+                    url: '/api/stop-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
+                });
+                
+                if (response.success) {
+                    showToast('Bot stopped successfully', 'success');
+                    loadBots();
+                } else {
+                    showToast('Failed to stop bot: ' + response.message, 'error');
+                }
+            } catch (error) {
+                showToast('Error stopping bot: ' + (error.responseJSON?.message || error.message), 'error');
+            }
+        }
+
+        async function deleteBot(botId) {
+            if (!confirm('Are you sure you want to delete this bot? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await $.ajax({
+                    url: '/api/delete-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
+                });
+                
+                if (response.success) {
+                    showToast('Bot deleted successfully', 'success');
+                    loadBots();
+                } else {
+                    showToast('Failed to delete bot: ' + response.message, 'error');
+                }
+            } catch (error) {
+                showToast('Error deleting bot: ' + (error.responseJSON?.message || error.message), 'error');
+            }
+        }
+
+        async function logoutBot(botId) {
+            if (!confirm('Are you sure you want to logout this bot?')) {
+                return;
+            }
+            
+            try {
+                const response = await $.ajax({
+                    url: '/api/logout-qr',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: userLogin,
+                        password: userPassword,
+                        botId: botId
+                    })
+                });
+                
+                if (response.success) {
+                    showToast('Bot logged out successfully', 'success');
+                    loadBots();
+                } else {
+                    showToast('Failed to logout bot: ' + response.message, 'error');
+                }
+            } catch (error) {
+                showToast('Error logging out bot: ' + (error.responseJSON?.message || error.message), 'error');
+            }
+        }
+
         // Setup event listeners
         function setupEventListeners() {
             // Search
             let searchTimeout;
-            document.getElementById('search-input').addEventListener('input', (e) => {
+            $('#search-input').on('input', function() {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    searchQuery = e.target.value.trim();
+                    searchQuery = $(this).val().trim();
                     currentPage = 1;
                     loadBots();
                 }, 500);
             });
 
             // Filters
-            document.getElementById('filter-status').addEventListener('change', (e) => {
-                filterStatus = e.target.value;
+            $('#filter-status').on('change', function() {
+                filterStatus = $(this).val();
                 currentPage = 1;
                 loadBots();
             });
 
-            document.getElementById('filter-bot-utama').addEventListener('change', (e) => {
-                filterBotUtama = e.target.checked;
+            $('#filter-bot-utama').on('change', function() {
+                filterBotUtama = $(this).is(':checked');
                 currentPage = 1;
                 loadBots();
             });
 
             // Page size
-            document.getElementById('page-size').addEventListener('change', (e) => {
-                pageSize = parseInt(e.target.value);
+            $('#page-size').on('change', function() {
+                pageSize = parseInt($(this).val());
                 currentPage = 1;
                 loadBots();
             });
 
             // Pagination
-            document.getElementById('prev-page').addEventListener('click', previousPage);
-            document.getElementById('next-page').addEventListener('click', nextPage);
+            $('#prev-page').on('click', previousPage);
+            $('#next-page').on('click', nextPage);
 
             // Add bot modal
-            document.getElementById('add-new-bot').addEventListener('click', showAddBotModal);
-            document.getElementById('close-modal').addEventListener('click', closeAddBotModal);
-            document.getElementById('cancel-add').addEventListener('click', closeAddBotModal);
-            document.getElementById('confirm-add').addEventListener('click', addNewBot);
+            $('#add-new-bot').on('click', showAddBotModal);
+            $('#close-modal, #cancel-add').on('click', closeAddBotModal);
+            $('#confirm-add').on('click', addNewBot);
 
             // Pairing method change
-            document.getElementById('pairing-method').addEventListener('change', (e) => {
-                const phoneField = document.getElementById('phone-number-field');
-                if (e.target.value === 'code') {
-                    phoneField.classList.remove('hidden');
+            $('#pairing-method').on('change', function() {
+                const $phoneField = $('#phone-number-field');
+                if ($(this).val() === 'code') {
+                    $phoneField.removeClass('hidden');
                 } else {
-                    phoneField.classList.add('hidden');
+                    $phoneField.addClass('hidden');
                 }
             });
 
             // Close modal on outside click
-            document.getElementById('add-bot-modal').addEventListener('click', (e) => {
+            $('#add-bot-modal').on('click', function(e) {
                 if (e.target.id === 'add-bot-modal') {
                     closeAddBotModal();
                 }
@@ -763,7 +1150,7 @@
         }
 
         // Initialize on page load
-        document.addEventListener('DOMContentLoaded', authenticate);
+        $(document).ready(authenticate);
     </script>
 </body>
 </html>

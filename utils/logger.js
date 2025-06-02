@@ -60,6 +60,9 @@ class Logger {
                 return 'null';
             } else if (arg === undefined) {
                 return 'undefined';
+            } else if (arg instanceof Error) {
+                // Special handling for Error objects
+                return `${arg.name}: ${arg.message}${arg.stack ? '\n' + arg.stack : ''}`;
             } else if (typeof arg === 'object') {
                 try {
                     return JSON.stringify(arg, null, 2);

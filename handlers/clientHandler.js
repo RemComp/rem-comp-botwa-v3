@@ -13,7 +13,6 @@ async function loadFileType() {
 }
 loadFileType().catch(err => {
     console.error('Failed to load file-type:', err)
-    process.exit(1)
 })
 
 function formatResponseFromGoClient (from, responseData, teks = '') {
@@ -569,6 +568,7 @@ module.exports = (rem, message, user) => {
         if(message?.isConsole) return console.log('unsupported format | groupMetadata')
 
         const payloadSend = {
+            apiKey: rem,
             groupJID: from
         }
         const responseData = await requestToGolangEngine('/api/getInfoGroup', payloadSend)
@@ -822,27 +822,27 @@ module.exports = (rem, message, user) => {
         sendButtons,
         sendList,
         sendButtonsImage,
-        sendReact,
+        // sendReact,
         sendContact,
         sendEditMessage,
         deleteMessage,
-        readMessages,
+        // readMessages,
         groupMetadata,
         groupAcceptInvite,
         groupInviteCode,
         groupGetInviteInfo,
         groupRevokeInvite,
         groupParticipantsUpdate,
-        groupSettingUpdate,
+        // groupSettingUpdate,
         groupUpdateSubject,
         groupUpdateDescription,
-        updateProfilePicture,
+        // updateProfilePicture,
         groupFetchAllParticipating,
         groupLeave,
         profilePictureUrl,
-        fetchStatus,
+        // fetchStatus,
         onWhatsApp,
-        sendPresenceUpdate,
+        // sendPresenceUpdate,
         user
     }
 }
