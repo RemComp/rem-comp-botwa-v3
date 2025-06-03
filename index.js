@@ -6,7 +6,17 @@ const axios = require('axios');
 const { sleep } = require('./utils/utils');
 const sessionInit = require('./session_init');
 
+if(!process.env.PORT_START) return console.error('PORT_START is not set in environment variables. Please set it before running the script.');
+if(!process.env.PORT_WEB) return console.error('PORT_WEB is not set in environment variables. Please set it before running the script.');
+if(!process.env.PORT_GOLANG) return console.error('PORT_GOLANG is not set in environment variables. Please set it before running the script.');
+if(!process.env.PROCESS_COUNT) return console.error('PROCESS_COUNT is not set in environment variables. Please set it before running the script.');
+
+if(!process.env.WEB_ADMIN_USERNAME) return console.error('WEB_ADMIN_USERNAME is not set in environment variables. Please set it before running the script.');
+if(!process.env.WEB_ADMIN_PASSWORD) return console.error('WEB_ADMIN_PASSWORD is not set in environment variables. Please set it before running the script.');
+
+if(!process.env.SERVER_ID) return console.error('SERVER_ID is not set in environment variables. Please set it before running the script.');
 if(!process.env.MONGO_URI) return console.error('MONGO_URI is not set in environment variables. Please set it before running the script.');
+if(!process.env.KEY_GOLANG) return console.error('KEY_GOLANG is not set in environment variables. Please set it before running the script.');
 
 async function setupMultiCLient() {
     // if not running by pm2, stop
