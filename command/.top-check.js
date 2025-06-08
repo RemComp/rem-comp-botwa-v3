@@ -33,6 +33,10 @@ async function messageHandler (rem, message, _userDb, _groupDb, _mentionUserDb, 
         _userDb = resultDbTimerUpdate._userDb
         isUserDbChanged = true
     }
+    if(resultDbTimerUpdate._message) {
+        message = resultDbTimerUpdate._message
+        isUserDbChanged
+    }
 
     // antispam check
     const resultAntispam = await checkAntiSpam(rem, message, _userDb, _groupDb, _mentionUserDb, clientData)
@@ -60,7 +64,7 @@ async function messageHandler (rem, message, _userDb, _groupDb, _mentionUserDb, 
         await _mongo_BotSchema.updateOne({ iId: 'CORE' }, { $inc: { "hits.today": 1, "hits.total": 1 } })
     }
 
-    if(isUserDbChanged) return { _userDb }
+    if(isUserDbChanged) return { _userDb, _message: message }
 }
 
 async function checkAntiSpam(rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
@@ -73,6 +77,10 @@ async function checkAntiSpam(rem, message, _userDb, _groupDb, _mentionUserDb, cl
             { $set: { antispam: { count: 0, countcmd: 0 } } }
         )
         _userDb.antispam = { count: 0, countcmd: 0, timeInit: Date.now() }
+    }
+    if(!_userDb?.antispam?.timeInit) {
+        _userDb.antispam.timeInit = Date.now()
+        await _mongo_UserSchema.updateOne({ iId: sender }, { $set: { "antispam.timeInit": Date.now() } })
     }
 
     // if timeInit is more than 1 minute ago, reset count
@@ -477,7 +485,7 @@ async function dbTimerUpdate(rem, message, _userDb, _groupDb, _mentionUserDb, cl
         await _mongo_UserSchema.updateOne({ iId: sender }, dbChangePayload)
     }
 
-    if(isChangedData) return { _userDb }
+    if(isChangedData) return { _userDb, _message: message }
 }
 
 module.exports = { priority, isAwait, messageHandler }

@@ -32,19 +32,19 @@ async function handleWebhookGolangEngine(payload) {
     let isChangedData = {}
     let codeCloseConnection = undefined
 
-    const dataJadibot = await _mongo_JadibotDeviceSchema.findOne({ apiKey: payload.apiKey })
-    if(!dataJadibot) {
+    const dataJadibot = payload?.apiKey ? await _mongo_JadibotDeviceSchema.findOne({ apiKey: payload.apiKey }) : null
+    if(payload?.apiKey && !dataJadibot) {
         global.log.error(`[${apiKey}] Error: apiKey not found in database, deleting device...`)
-        stopBot(apiKey)
+        stopBot(apiKey, true, true)
         return
     }
-    let rem = clientHandler(apiKey, {})
+    let rem = payload?.apiKey ? clientHandler(apiKey, {}) : null
     let remSourceJadibot = null
     if(dataJadibot?.sourceJadibotApiKey) {
         remSourceJadibot = clientHandler(dataJadibot?.sourceJadibotApiKey, {})
     }
-    if(!global.listBot[apiKey]) await syncDataDevice()
-    if(!global.listBot[apiKey]) {
+    if(payload?.apiKey && !global.listBot[apiKey]) await syncDataDevice()
+    if(payload?.apiKey && !global.listBot[apiKey]) {
         global.log.error(`[${apiKey}] Error: apiKey not found in global.listBot`)
         return
     }
@@ -83,6 +83,8 @@ async function handleWebhookGolangEngine(payload) {
             let alreadyClosed = false
             async function sendQrBulkData(pos = 0) {
 				if(pos == data.length) return
+
+                dataJadibot = await _mongo_JadibotDeviceSchema.findOne({ apiKey: apiKey })
                 if(!dataJadibot || (dataJadibot?.stateStatus === 3) || (dataJadibot?.stateStatus === 0)) return data = []
 				if((dataJadibot?.settings?.pairMethod === 'code') && (pos === 0)) {
 					if(!dataJadibot?.settings?.numberHp) {
@@ -142,7 +144,7 @@ async function handleWebhookGolangEngine(payload) {
                         return
                     }
 				} else if((dataJadibot?.settings?.pairMethod === 'qr')) {
-                    qr.toDataURL(data[pos], async function (err, url) {
+                    qr.toBuffer(data[pos], { type: 'png' }, async function (err, url) {
                         if(err) {
                             global.log.error(`[${apiKey}] Error generating QR code:`, err)
 
@@ -375,7 +377,7 @@ async function handleWebhookGolangEngine(payload) {
             isChangeState = 3
             if(((data.Info.Chat === 'status@broadcast') || (data.Info.Sender === 'status@broadcast'))) return
 
-            const message = messagesBeautify(apiKey, data, data, global.listBot[apiKey].user)
+            let message = messagesBeautify(apiKey, data, data, global.listBot[apiKey].user)
             if(message == {} || message == undefined || message == [] || message == '' || !message) return
             if(!message.sender) return
 
@@ -446,22 +448,63 @@ async function handleWebhookGolangEngine(payload) {
             }
 
             rem = clientHandler(apiKey, message, global.listBot[apiKey].user)
-            const clientData = formatRequiredDataClient(rem, userDb, groupDb, message)
+            let clientData = formatRequiredDataClient(rem, userDb, groupDb, message)
 
-            const passTo = global.listCommand.filter(plugin => {
+            let passTo = global.listCommand.filter(plugin => {
                 if(!plugin?.cmd) return true
                 if(clientData.isCmd && plugin?.cmd?.includes(clientData.command)) return true
                 return false
             }).sort((a, b) => a.priority - b.priority)
 
-            for(const plugin of passTo) {
-                if(!plugin.messageHandler) continue
+            let currentIndex = 0
+            let alreadyProcessedCmd = []
+            while(currentIndex < passTo.length) {
+                const plugin = passTo[currentIndex]
+                
+                if(!plugin.messageHandler) {
+                    currentIndex++
+                    continue
+                }
 
+                let isChangedData = false
                 const response = plugin?.isAwait ? (await plugin.messageHandler(rem, message, userDb, groupDb, mentionUserDb, clientData)) : plugin.messageHandler(rem, message, userDb, groupDb, mentionUserDb, clientData)
-                if(response?._userDb) userDb = response._userDb
-                if(response?._groupDb) groupDb = response._groupDb
-                if(response?._mentionUserDb) mentionUserDb = response._mentionUserDb
+                alreadyProcessedCmd.push(plugin.name)
+
+                if(response?._userDb) {
+                    userDb = response._userDb
+                    isChangedData = true
+                }
+                if(response?._groupDb) {
+                    groupDb = response._groupDb
+                    isChangedData = true
+                }
+                if(response?._mentionUserDb) {
+                    mentionUserDb = response._mentionUserDb
+                    isChangedData = true
+                }
+                if(response?._message) {
+                    message = response._message
+                    isChangedData = true
+                }
                 if (response === 'break') break
+
+                if(isChangedData) {
+                    clientData = formatRequiredDataClient(rem, userDb, groupDb, message)
+                    const newPassTo = global.listCommand.filter(plugin => {
+                        if(!plugin?.cmd) return true
+                        if(clientData.isCmd && plugin?.cmd?.includes(clientData.command)) return true
+                        return false
+                    }).sort((a, b) => a.priority - b.priority)
+                    
+                    
+                    // Reset to start processing from the beginning with new filter results
+                    passTo = newPassTo.filter(plugin => !alreadyProcessedCmd.includes(plugin.name))
+                    currentIndex = 0
+                    
+                    if(passTo.length == 0) break
+                } else {
+                    currentIndex++
+                }
             }
             break
         case 'server_start':
@@ -491,8 +534,8 @@ async function handleWebhookGolangEngine(payload) {
             break
     }
 
-    if(!global.listBot[apiKey]) await syncDataDevice()
-    if(isChangeState !== false && isChangeState !== null && !isNaN(isChangeState) || (isChangedData && (JSON.stringify(isChangedData) !== '{}'))) {
+    if(payload?.apiKey && !global.listBot[apiKey]) await syncDataDevice()
+    if(payload?.apiKey && (isChangedData && (JSON.stringify(isChangedData) !== '{}'))) {
         const changedData = isChangedData
         if(dataJadibot?.stateStatus !== isChangeState) {
             if(global.listBot[apiKey]) global.listBot[apiKey].stateStatus = isChangeState
@@ -501,12 +544,10 @@ async function handleWebhookGolangEngine(payload) {
             changedData.stateStatus = isChangeState
         }
 
-        if(changedData && (JSON.stringify(changedData) !== '{}')) {
-            await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
-        }
+        await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: isChangedData })
     }
 
-    if(codeCloseConnection !== undefined && codeCloseConnection !== null && !isNaN(codeCloseConnection)) {
+    if(payload?.apiKey && codeCloseConnection !== undefined && codeCloseConnection !== null && !isNaN(codeCloseConnection)) {
         const isCanReconnect = (codeCloseConnection != 401) && (codeCloseConnection != 403 /*Banned*/) && (codeCloseConnection != 402 /*Temp Banned*/) && (codeCloseConnection != 440) && (codeCloseConnection != 411)
         if(isCanReconnect) {
             global.log.info(`[${apiKey}] Connection closed with code ${codeCloseConnection}, trying to reconnect...`)
@@ -532,6 +573,12 @@ async function startBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPho
     if(sourceJadibotApiKey) {
         const rem = clientHandler(sourceJadibotApiKey, {})
         rem.sendText(ownerJadibotPhone, `*${nameDevice}* is starting...`)
+
+        await _mongo_JadibotDeviceSchema.updateOne({ apiKey: apiKey }, { $set: { sourceJadibotApiKey, ownerJadibotPhone } })
+        if(global.listBot[apiKey]) {
+            global.listBot[apiKey].sourceJadibotApiKey = sourceJadibotApiKey
+            global.listBot[apiKey].ownerJadibotPhone = ownerJadibotPhone
+        }
     }
 
     const responseStartDevice = await requestToGolangEngine('/session/connect', {
@@ -547,7 +594,7 @@ async function startBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPho
     return responseStartDevice
 }
 
-async function stopBot(apiKey, delObjSess = false) {
+async function stopBot(apiKey, delObjSess = false, isError = false) {
     const responseStopDevice = await requestToGolangEngine('/session/disconnect', { apiKey, isDelKey: delObjSess })
     if(responseStopDevice.error && responseStopDevice.error != 'not_connected') {
         global.log.error(`[${apiKey}] Error stop device:`, responseStopDevice.error)
@@ -555,7 +602,7 @@ async function stopBot(apiKey, delObjSess = false) {
     }
     global.log.info(`[${apiKey}] Device stopped successfully.`)
 
-    handleWebhookGolangEngine({
+    if(!isError) handleWebhookGolangEngine({
         apiKey,
         type: 'client_disconnect'
     })
@@ -585,6 +632,8 @@ async function addBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPhone
         return { error: 'numberHp is required for pairMethod code' }
     }
 
+    const formattedOwnerJadibotPhone = ((ownerJadibotPhone.startsWith('08') ? ownerJadibotPhone.replace('08', '628') : ownerJadibotPhone)?.replace(/\+|@s.whatsapp.net|@|-| /gi, '')?.replace(/\s/g, '')?.trim())  + '@s.whatsapp.net'
+    const formattedNumberHp = numberHp ? ((numberHp?.startsWith('08') ? numberHp.replace('08', '628') : numberHp)?.replace(/\+|@s.whatsapp.net|@|-| /gi, '')?.replace(/\s/g, '')?.trim())  + '@s.whatsapp.net' : null
     const newDevice = {
         apiKey,
         serverId: process.env.SERVER_ID || 'default',
@@ -593,10 +642,10 @@ async function addBot(apiKey, nameDevice, sourceJadibotApiKey, ownerJadibotPhone
         reasonDisconnected: null,
         settings: {
             pairMethod: pairMethod || 'qr',
-            numberHp: numberHp || null
+            numberHp: formattedNumberHp || null
         },
         sourceJadibotApiKey,
-        ownerJadibotPhone,
+        ownerJadibotPhone: formattedOwnerJadibotPhone,
         isBotUtama: false
     }
     const newDeviceData = await _mongo_JadibotDeviceSchema.create(newDevice)

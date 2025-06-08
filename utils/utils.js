@@ -2,6 +2,7 @@ const { randomBytes } = require('crypto');
 const axios = require('axios');
 
 const { ownerNumber, ownerNumber2, sideOwnerNumber } = require('../lib/constants');
+const { _mongo_UserSchema } = require('../lib/database');
 
 const base64RegExp = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
 const isBase64 = (str) => base64RegExp.test(str);
@@ -198,7 +199,11 @@ function formatRequiredDataClient(rem, _userDb, _groupDb, message) {
 }
 
 function generateRandomString(length) {
-  return randomBytes(length / 2).toString('hex').slice(0, length);
+  	return randomBytes(length / 2).toString('hex').slice(0, length);
+}
+
+async function addCollectorMessage (userId, from, id, timeout, isReply, messageReply) {
+    return await _mongo_UserSchema.updateOne({ iId: userId }, { $push: { "collectMessage": { id, from, timeout, isReply, messageReply } } })
 }
 
 module.exports = {
@@ -214,5 +219,6 @@ module.exports = {
 	showElapsedTime,
 	shuffleArray,
 	formatRequiredDataClient,
-	generateRandomString
+	generateRandomString,
+	addCollectorMessage
 }
