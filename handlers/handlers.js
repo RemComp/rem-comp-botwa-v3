@@ -32,7 +32,7 @@ async function handleWebhookGolangEngine(payload) {
     let isChangedData = {}
     let codeCloseConnection = undefined
 
-    const dataJadibot = payload?.apiKey ? await _mongo_JadibotDeviceSchema.findOne({ apiKey: payload.apiKey }) : null
+    let dataJadibot = payload?.apiKey ? await _mongo_JadibotDeviceSchema.findOne({ apiKey: payload.apiKey }) : null
     if(payload?.apiKey && !dataJadibot) {
         global.log.error(`[${apiKey}] Error: apiKey not found in database, deleting device...`)
         stopBot(apiKey, true, true)
@@ -537,7 +537,7 @@ async function handleWebhookGolangEngine(payload) {
     if(payload?.apiKey && !global.listBot[apiKey]) await syncDataDevice()
     if(payload?.apiKey && (isChangedData && (JSON.stringify(isChangedData) !== '{}'))) {
         const changedData = isChangedData
-        if(dataJadibot?.stateStatus !== isChangeState) {
+        if(dataJadibot?.stateStatus !== isChangeState && (isChangeState !== undefined) && (isChangeState !== null) && !isNaN(isChangeState)) {
             if(global.listBot[apiKey]) global.listBot[apiKey].stateStatus = isChangeState
             global.log.info(`[${apiKey}] State status changed to ${isChangeState}`)
 
@@ -674,6 +674,7 @@ async function syncDataDevice() {
 
 		const allDataStatus = Object.values(getDataStatus.data)
         const allSyncedApiKey = []
+        const batchUpdateStateStatus = []
 		for(let i = 0; i < allDataStatus.length; i++) {
 			const dataStatus = allDataStatus[i]
 			if(!dataStatus) continue
@@ -698,6 +699,12 @@ async function syncDataDevice() {
                     stopBot(dataStatus.ApiKey)
                     continue
                 }
+
+                // if data stateStatus not match with dataDevices, update it
+                if(dataDevices.stateStatus !== stateStatus) {
+                    batchUpdateStateStatus.push({ apiKey: dataStatus.ApiKey, stateStatus })
+                }
+
                 global.listBot[dataStatus.ApiKey] = Object.assign(dataDevices, setStatus)
             }
             if(!global.listBot[dataStatus.ApiKey]?.user?.id) {
@@ -707,11 +714,25 @@ async function syncDataDevice() {
                     jid: formattedJidGet,
                 }
             }
+
+            if(global.listBot[dataStatus.ApiKey]?.stateStatus !== stateStatus) {
+                batchUpdateStateStatus.push({ apiKey: dataStatus.ApiKey, stateStatus })
+            }
 			global.listBot[dataStatus.ApiKey] = Object.assign(global.listBot[dataStatus.ApiKey], setStatus)
 		}
 
         // delete data that not in allSyncedApiKey in the global.listBot
         global.listBot = Object.fromEntries(Object.entries(global.listBot).filter(([key]) => allSyncedApiKey.includes(key)))
+
+        if(batchUpdateStateStatus.length > 0) {
+            const updateQueries = batchUpdateStateStatus.map(data => ({
+                updateOne: {
+                    filter: { apiKey: data.apiKey },
+                    update: { $set: { stateStatus: data.stateStatus } }
+                }
+            }))
+            await _mongo_JadibotDeviceSchema.bulkWrite(updateQueries)
+        }
 	} catch(e) {
 		global.log.error(`Error sync data device:`, e)
 	}

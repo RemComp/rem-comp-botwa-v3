@@ -19,13 +19,22 @@ async function messageHandler (rem, message, userDb, groupDb, mentionUserDb, cli
         let formattedText = `*「 DEVICE 」*\n\n`;
         if(getListDevice.length > 0) {
             getListDevice.forEach((device, index) => {
-                formattedText += `*${index + 1}.* ${device.nameDevice}${device?.settings?.numberHp ? ` (${device.settings.numberHp?.replace('@s.whatsapp.net', '')})` : ''}\n`;
+                formattedText += `${index + 1}. *${device.nameDevice}*${device?.settings?.numberHp ? ` (${device.settings.numberHp?.replace('@s.whatsapp.net', '')})` : ''}\n`;
+                /**
+                 * stateStatus Type:
+                 * 0 = offline
+                 * 1 = pairing
+                 * 2 = scan
+                 * 3 = connected
+                 */
+                formattedText += `*Status :* _${device.stateStatus === 0 ? 'Offline' : device.stateStatus === 1 ? 'Pairing' : device.stateStatus === 2 ? 'Scanning' : 'Connected'}_\n\n`;
             });
         } else {
             formattedText += 'Tidak ada perangkat terdaftar.';
         }
-        formattedText += `\nTotal Perangkat: ${getListDevice.length}\n\n*Contoh penggunaan:*\n\n- Untuk Menambah Device\n*${clientData.prefix}device add <nama perangkat>*\n\n- Untuk Menghapus Device\n*${clientData.prefix}device delete <nomor perangkat>*\n\n- Untuk Start Device\n*${clientData.prefix}device <nomor perangkat>*\n\n- Untuk Stop Device\n*${clientData.prefix}device stop <nomor perangkat>*\n\n- Untuk Logout Device\n*${clientData.prefix}device logout <nomor perangkat>*`;
-        return rem.reply(from, formattedText);
+        formattedText += `Total Perangkat: ${getListDevice.length}\n——————————\n\n`;
+        rem.reply(from, formattedText);
+        return rem.sendText(from, `*「 DEVICE 」*\n\n- Untuk Menambah Device\n*${clientData.prefix}device add <nama perangkat>*\nContoh: _${clientData.prefix}device add MyDevice_\n\n- Untuk Menghapus Device\n*${clientData.prefix}device delete <nomor perangkat>*\nContoh: _${clientData.prefix}device delete 1_\n\n- Untuk Start Device\n*${clientData.prefix}device <nomor perangkat>*\nContoh: _${clientData.prefix}device 1_\n\n- Untuk Stop Device\n*${clientData.prefix}device stop <nomor perangkat>*\nContoh: _${clientData.prefix}device stop 1_\n\n- Untuk Logout Device\n*${clientData.prefix}device logout <nomor perangkat>*\nContoh: _${clientData.prefix}device logout 1_\n\n- Untuk Melihat Daftar Device\n*${clientData.prefix}device*`);
     }
 
     if(allArgs[1] === 'add') {
