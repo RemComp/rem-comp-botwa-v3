@@ -34,5 +34,8 @@
     "path": "^0.12.7",
     "qrcode": "^1.5.4",
     "snappy": "^7.2.2"
+  },
+  "devDependencies": {
+    "jest": "^30.1.1"
   }
 }
