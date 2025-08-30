@@ -1,6 +1,6 @@
 const priority = 3;
 const isAwait = false;
-const cmd = ["ping"];
+const cmd = ['ping'];
 
 async function messageHandler(
   rem,
