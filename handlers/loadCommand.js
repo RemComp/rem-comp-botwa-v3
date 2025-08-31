@@ -7,7 +7,7 @@ async function loadCommand() {
     for (const command of commandList) {
         const isDir = fs.statSync(path.resolve(`${process.cwd()}/command/${command}`)).isDirectory();
         if (command.endsWith('.js')) {
-            const commandName = command.slice(0, -3);
+            const commandName = command.split(".js")[0]
             const commandLoad = require(path.resolve(`${process.cwd()}/command/${command}`));
             if(!commandLoad || !commandLoad.messageHandler) {
                 global.log.warn(`Command ${commandName} is not valid or does not have a messageHandler function.`);
@@ -15,11 +15,12 @@ async function loadCommand() {
             }
     
             const commandPriority = commandLoad.priority || 0;
+            const { messageHandler, isAwait, cmd } = commandLoad
             commandTmp.push({
                 name: commandName,
-                messageHandler: commandLoad.messageHandler,
-                isAwait: commandLoad.isAwait || false,
-                cmd: commandLoad?.cmd || false, // if false will pass any message with/not prefix
+                messageHandler,
+                isAwait,
+                cmd,
                 priority: commandPriority
             });
         } else if (isDir) {
@@ -32,13 +33,14 @@ async function loadCommand() {
                     continue; // Skip invalid commands
                 }
 
-                const nameCmd = file.slice(0, -3)
+                const nameCmd = file.split(".js")[0]
                 const commandPriority = commandLoad.priority || 0;
+                const { messageHandler, isAwait, cmd } = commandLoad
                 commandTmp.push({
-                    name: nameCmd === 'index' ? command : `${command}/${file.slice(0, -3)}`,
-                    messageHandler: commandLoad.messageHandler,
-                    isAwait: commandLoad.isAwait || false,
-                    cmd: commandLoad?.cmd || false, // if false will pass any message
+                    name: nameCmd === 'index' ? command : `${command}/${file.split(".js")[0]}`,
+                    messageHandler,
+                    isAwait,
+                    cmd,
                     priority: commandPriority
                 });
             }
