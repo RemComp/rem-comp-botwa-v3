@@ -6,13 +6,13 @@ const setUserRoleplayMantan_pasangan = async (userId, mal_id) => {
 
 const getUserRoleplayMantan_pasangan = (_userDb) => {
     let _mantan = _userDb.rl.mantan
-    if (JSON.stringify(_mantan) != '[]') {
+    if (_mantan[0]) {
         return _mantan
     }
 }
 
-const addUserRoleplayMantan_pasangan = async (userId, textId) => {
-    await  _mongo_UserSchema.updateOne({ iId: userId }, { $push: { "rl.mantan": textId } })
+const addUserRoleplayMantan_pasangan = async (userId, mal_id) => {
+    await  _mongo_UserSchema.updateOne({ iId: userId }, { $push: { "rl.mantan": mal_id } })
 }
 
 //Pasangan
@@ -28,15 +28,14 @@ anak = ID anak, anak, lahir sejak, gender
 nkkand = Anak lahir Perlu Confirm
         {id: XXXXXXXXX, lahir: <format Date.now()>, gender: 'Cowo/Cewe'}
 */  
-const setUserRoleplay_pasangan = async (userId, nama, gender, imgUrl, MALid, MALurl) => {
-    let obj = { nama: nama, gender, umurpd: Date.now(), img: imgUrl, mal_id: MALid, mal_url: MALurl, level: 0, xp: 0, food: 100, hubungan: 6, uang: 0, status: 'Pacaran', status2: 'none', anak: [], nkkand: [] }
-    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd": obj } })
+const setUserRoleplay_pasangan = async (userId, nama, gender, img, mal_id, mal_url) => {
+    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set:  { "rl.pd": { nama, gender, umurpd: Date.now(), img, mal_id, mal_url, level: 0, xp: 0, food: 100, hubungan: 6, uang: 0, status: 'Pacaran', status2: 'none', anak: [], nkkand: [] }}})
 }
 
 const getUserRoleplay_pasangan = (_userDb) => {
     let _pasangan = _userDb.rl?.pd
-    if(_pasangan?.mal_id == undefined) return undefined
-    if (JSON.stringify(_pasangan) != '{}') {
+    if(!_pasangan?.mal_id) return undefined
+    if (_pasangan) {
         return _pasangan
     }
 }
@@ -57,7 +56,7 @@ const multiplierHubunganBurukMin = 0.9
 const replaceUserRoleplayHubungan_pasangan = async (userId, CalculateAmount) => {
     const _pasangan = await _mongo_UserSchema.findOne({ iId: userId })
     let pd = _pasangan.rl.pd
-    if (JSON.stringify(pd) != '{}') {
+    if (pd) {
 
         // if((pd.hubungan < CalculateAmount) && pd.mood === 'Buruk 😡') {
         //     CalculateAmount = Math.floor(CalculateAmount * multiplierHubunganBurukMin)
@@ -106,12 +105,12 @@ const replaceUserRoleplayUang_pasangan = async (userId, CalculateAmount) => {
     await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd.uang": CalculateAmount } })
 }
 
-const replaceUserRoleplayStatus_pasangan = async (userId, text) => {
-    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd.status": text } })
+const replaceUserRoleplayStatus_pasangan = async (userId, status ) => {
+    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd.status": status } })
 }
 
-const replaceUserRoleplayStatus2_pasangan = async (userId, text) => {
-    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd.status2": text } })
+const replaceUserRoleplayStatus2_pasangan = async (userId, status2) => {
+    await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { "rl.pd.status2": status2 } })
 }
 
 const replaceUserRoleplayValue_pasangan = async (userId, input, textOrNumber) => {
@@ -145,8 +144,8 @@ const getUserRoleplayAnakKandungan_pasangan = (id) => {
     }
 }*/
 
-const addUserRoleplayAnak_pasangan = async (userId, idAnak, nama, waktuLahir, gender) => {
-    await  _mongo_UserSchema.updateOne({ iId: userId }, { $addToSet: { "rl.pd.anak": { id: idAnak, nama: nama, lahir: waktuLahir, gender: gender } } })
+const addUserRoleplayAnak_pasangan = async (userId, id, nama, lahir, gender) => {
+    await  _mongo_UserSchema.updateOne({ iId: userId }, { $addToSet: { "rl.pd.anak": { id, nama, lahir, gender } } })
 }
 
 module.exports = {
