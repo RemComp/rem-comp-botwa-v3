@@ -8,8 +8,8 @@ const { timeConvert, numberWithCommas, fixNumberE, showElapsedTime } = require('
 const { getLevelingLevel, getLevelingXp, addLevelingXp, addLevelingLevel } = require('../command/level/functions')
 const { getUserItemId, getItemLevel } = require('../command/item/functions')
 const { getNama } = require('../command/profile/functions')
-const { addUserRoleplayLevel_pasangan } = require('../command/pd/functions')
-const { getUserJobId, getLvlJob, getXpJob, addJobLvl, addJobMulti, getUserJob } = require('../command/job/functions')
+const { addUserRoleplayLevel_pasangan } = require('../command/roleplay/functions_pd')
+const { getUserJobId, getLvlJob, getXpJob, addJobLvl, addJobMulti, getUserJob } = require('../command/economy/job/functions')
 
 async function messageHandler (rem, message, _userDb, _groupDb, _mentionUserDb, clientData) {
     const { 

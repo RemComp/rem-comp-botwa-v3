@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { spawn, exec, execSync } = require('child_process')
+const { spawn, exec, execSync } = require('child_process');
 const path = require('path');
 const axios = require('axios');
 const { sleep } = require('./utils/utils');

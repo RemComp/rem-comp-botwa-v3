@@ -3,7 +3,7 @@ const isAwait = true
 
 const { addLevelingXp } = require('./level/functions')
 const { getUserItemId, getItemLevel } = require('./item/functions')
-const { addMoney } = require('./money/functions')
+const { addMoney } = require('./economy/functions_money')
 const { 
     getTicTac_toe, replaceTicTac_status, replaceTicTac_xo, replaceTicTac_turn, replaceTicTac_toe_game,
     generateBoardIcons, checkWinCondition, checkDraw, handleGameDraw, handleGameWin

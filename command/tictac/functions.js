@@ -1,6 +1,8 @@
+const { _mongo_UserSchema } = require('../../lib/database')
+
 //FUNCTION TICTAC
 //PROFILE
-const setTicTac_profile = async (userId) => {
+const setTicTac_profile = async (userId) =>{
     const obj = {poin: 0, win: 0, lose: 0, draw: 0 }
     await  _mongo_UserSchema.updateOne({ iId: userId }, { $set: { tictac: obj } })
 }
